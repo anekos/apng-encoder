@@ -1,0 +1,7 @@
+[package]
+name = "tiny-apng"
+version = "0.1.0"
+authors = ["anekos <anekos@snca.net>"]
+edition = "2018"
+
+[dependencies]
