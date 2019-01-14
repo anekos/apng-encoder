@@ -20,6 +20,12 @@ mod tests {
 
         let mut file = File::create("something.png").unwrap();
         let mut encoder = apng::encoder::Encoder::new(&mut file, &meta).unwrap();
+        encoder.write_frame(
+            &[
+            0xff, 0x00, 0x00, 0x00, 0xff, 0x00,
+            0x00, 0x00, 0xff, 0x00, 0x00, 0x00,
+            ]).unwrap();
+        encoder.finish().unwrap();
         // encoder.write(&[]).unwrap();
     }
 }

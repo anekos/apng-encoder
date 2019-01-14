@@ -5,3 +5,5 @@ authors = ["anekos <anekos@snca.net>"]
 edition = "2018"
 
 [dependencies]
+flate2 = "*"
+byteorder = "*"
