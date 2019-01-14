@@ -28,7 +28,7 @@ impl<'a, F: io::Write> Encoder<'a, F> {
 
     pub fn write_frame(&mut self, image_data: &[u8]) -> io::Result<()> {
         let mut buffer = vec![];
-        let mut e = DeflateEncoder::new(&mut buffer, Compression::none());
+        let mut e = DeflateEncoder::new(&mut buffer, Compression::default());
         e.write_all(image_data).unwrap();
         e.finish().unwrap();
         self.write_chunk(b"IDAT", &buffer)?;
