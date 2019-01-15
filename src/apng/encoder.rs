@@ -60,7 +60,7 @@ impl<'a, F: io::Write> Encoder<'a, F> {
         let mut buffer = vec![];
         buffer.write_u32::<BigEndian>(self.next_sequence())?;
         buffer.flush()?;
-        let mut e = ZlibEncoder::new(&mut buffer, Compression::none());
+        let mut e = ZlibEncoder::new(&mut buffer, Compression::best());
         for line in image_data.chunks(row_stride) {
             e.write_all(&[0x00]).unwrap();
             e.write_all(line).unwrap();
@@ -97,7 +97,7 @@ impl<'a, F: io::Write> Encoder<'a, F> {
         self.write_frame_control()?;
 
         let mut buffer = vec![];
-        let mut e = ZlibEncoder::new(&mut buffer, Compression::none());
+        let mut e = ZlibEncoder::new(&mut buffer, Compression::best());
         for line in image_data.chunks(row_stride) {
             e.write_all(&[0x00]).unwrap();
             e.write_all(line).unwrap();
