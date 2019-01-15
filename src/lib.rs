@@ -11,11 +11,17 @@ mod tests {
         use crate::apng;
         use std::fs::File;
 
+        let color = apng::Color {
+            alpha_channel: false,
+            grayscale: false,
+            pallete: false,
+        };
+
         let meta = apng::Meta {
             width: 2,
             heiht: 2,
             bit_depth: 8,
-            color_type: apng::ColorType::RGB,
+            color,
         };
 
         let mut file = File::create("something.png").unwrap();
@@ -24,7 +30,8 @@ mod tests {
             &[
             0xff, 0x00, 0x00, 0x00, 0xff, 0x00,
             0x00, 0x00, 0xff, 0x00, 0x00, 0x00,
-            ]).unwrap();
+            ],
+            6).unwrap();
         encoder.finish().unwrap();
         // encoder.write(&[]).unwrap();
     }

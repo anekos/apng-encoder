@@ -4,7 +4,7 @@ use std::io::{self, Write};
 use byteorder::{BigEndian, WriteBytesExt};
 use flate2::Compression;
 use flate2::Crc;
-use flate2::write::DeflateEncoder;
+use flate2::write::ZlibEncoder;
 
 use super::Meta;
 
@@ -26,10 +26,13 @@ impl<'a, F: io::Write> Encoder<'a, F> {
         Ok(instance)
     }
 
-    pub fn write_frame(&mut self, image_data: &[u8]) -> io::Result<()> {
+    pub fn write_frame(&mut self, image_data: &[u8], row_stride: usize) -> io::Result<()> {
         let mut buffer = vec![];
-        let mut e = DeflateEncoder::new(&mut buffer, Compression::default());
-        e.write_all(image_data).unwrap();
+        let mut e = ZlibEncoder::new(&mut buffer, Compression::none());
+        for line in image_data.chunks(row_stride) {
+            e.write_all(&[0x00]).unwrap();
+            e.write_all(line).unwrap();
+        }
         e.finish().unwrap();
         self.write_chunk(b"IDAT", &buffer)?;
         Ok(())
@@ -60,7 +63,7 @@ impl<'a, F: io::Write> Encoder<'a, F> {
         buffer.write_u32::<BigEndian>(meta.width)?;
         buffer.write_u32::<BigEndian>(meta.heiht)?;
         // ... compression_method, filter_method, interlace_method
-        buffer.write(&[meta.bit_depth, meta.color_type as u8, 0, 0, 0])?;
+        buffer.write(&[meta.bit_depth, meta.color.to_u8(), 0, 0, 0])?;
         self.write_chunk(b"IHDR", &buffer)
     }
 
