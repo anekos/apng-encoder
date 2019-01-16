@@ -11,6 +11,7 @@ pub struct Meta {
     pub color: Color,
     pub frames: u32,
     pub height: u32,
+    pub plays: Option<u32>,
     pub width: u32,
 }
 

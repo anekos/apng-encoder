@@ -28,6 +28,7 @@ use super::{Frame, Meta};
 ///         grayscale: false,
 ///     },
 ///     frames: 4,
+///     plays: None, // Infinite loop
 /// };
 ///
 /// // Delay = 2 seconds
@@ -104,7 +105,7 @@ impl<'a, F: io::Write> Encoder<'a, F> {
         };
         Self::write_signature(&mut instance)?;
         Self::write_image_header(&mut instance, meta)?;
-        Self::write_animation_control(&mut instance, meta.frames)?;
+        Self::write_animation_control(&mut instance, meta.frames, meta.plays.unwrap_or(0))?;
         Ok(instance)
     }
 
@@ -147,10 +148,10 @@ impl<'a, F: io::Write> Encoder<'a, F> {
         Ok(())
     }
 
-    fn write_animation_control(&mut self, frames: u32) -> io::Result<()> {
+    fn write_animation_control(&mut self, frames: u32, plays: u32) -> io::Result<()> {
         let mut buffer = vec![];
         buffer.write_u32::<BigEndian>(frames)?;
-        buffer.write_u32::<BigEndian>(0)?;
+        buffer.write_u32::<BigEndian>(plays)?;
         self.write_chunk(b"acTL", &buffer)
     }
 

@@ -22,6 +22,7 @@ mod tests {
                 grayscale: false,
             },
             frames: 4,
+            plays: None, // Infinite loop
         };
 
         // Delay = 2 seconds
