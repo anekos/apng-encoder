@@ -8,37 +8,70 @@ pub mod apng;
 mod tests {
     #[test]
     fn it_works() {
-        use crate::apng;
+        use crate::apng::{Color, Delay, Frame, Meta};
+        use crate::apng::encoder::Encoder;
         use std::fs::File;
 
-        let color = apng::Color {
-            alpha_channel: false,
-            grayscale: false,
-            palette: false,
-        };
-
-        let meta = apng::Meta {
+        // Generate 2x2 Animated PNG (4 frames)
+        let meta = Meta {
             width: 2,
             height: 2,
-            bit_depth: 8,
-            color,
-            frames: 2,
+            color: Color {
+                alpha_channel: false,
+                bit_depth: 8,
+                grayscale: false,
+            },
+            frames: 4,
         };
 
-        let mut file = File::create("something.png").unwrap();
-        let mut encoder = apng::encoder::Encoder::new(&mut file, &meta).unwrap();
+        // Delay = 2 seconds
+        let frame = Frame {
+            delay: Some(Delay::new(2, 1)),
+            ..Default::default()
+        };
+
+        let mut file = File::create("rgb-rotation.png").unwrap();
+        let mut encoder = Encoder::new(&mut file, &meta).unwrap();
+
+        // RED   GREEN
+        // BLACK BLUE
         encoder.write_frame(
             &[
-            0x12, 0x33, 0x21, 0x23, 0x44, 0x32,
-            0x34, 0x55, 0x43, 0x45, 0x66, 0x54,
+         // (x=0,y=0)            (x=1,y=0)
+            0xFF, 0x00, 0x00,    0x00, 0xFF, 0x00,
+         // (x=0,y=1)            (x=1,y=1)
+            0x00, 0x00, 0x00,    0x00, 0x00, 0xFF,
             ],
-            6).unwrap();
+            None,
+            Some(&frame)).unwrap();
+        // BLACK RED
+        // BLUE  GREEN
         encoder.write_frame(
             &[
-            0x34, 0x55, 0x43, 0x45, 0x66, 0x54,
-            0x12, 0x33, 0x21, 0x23, 0x44, 0x32,
+            0x00, 0x00, 0x00,   0xFF, 0x00, 0x00,
+            0x00, 0x00, 0xFF,   0x00, 0xFF, 0x00,
             ],
-            6).unwrap();
+            None,
+            Some(&frame)).unwrap();
+        // BLUE  BLACK
+        // GREEN RED
+        encoder.write_frame(
+            &[
+            0x00, 0x00, 0xFF,   0x00, 0x00, 0x00,
+            0x00, 0xFF, 0x00,   0xFF, 0x00, 0x00,
+            ],
+            None,
+            Some(&frame)).unwrap();
+        // GREEN BLUE
+        // RED   BLACK
+        encoder.write_frame(
+            &[
+            0x00, 0xFF, 0x00,   0x00, 0x00, 0xFF,
+            0xFF, 0x00, 0x00,   0x00, 0x00, 0x00,
+            ],
+            None,
+            Some(&frame)).unwrap();
+        // !!IMPORTANT DONT FORGET!!
         encoder.finish().unwrap();
     }
 }
