@@ -9,8 +9,10 @@ pub mod encoder;
 
 pub struct Meta {
     pub color: Color,
+    /// Number of animation frames
     pub frames: u32,
     pub height: u32,
+    /// Number of plays
     pub plays: Option<u32>,
     pub width: u32,
 }
