@@ -9,7 +9,7 @@ mod tests {
     #[test]
     fn it_works() {
         use crate::apng::{Color, Delay, Frame, Meta};
-        use crate::apng::encoder::Encoder;
+        use crate::apng::encoder::{Encoder, Filter};
         use std::fs::File;
 
         // Generate 2x2 Animated PNG (4 frames)
@@ -25,13 +25,15 @@ mod tests {
             plays: None, // Infinite loop
         };
 
+        let filter = Some(Filter::Up);
+
         // Delay = 2 seconds
         let frame = Frame {
             delay: Some(Delay::new(2, 1)),
             ..Default::default()
         };
 
-        let mut file = File::create("rgb-rotation.png").unwrap();
+        let mut file = File::create("test.png").unwrap();
         let mut encoder = Encoder::new(&mut file, &meta).unwrap();
 
         // RED   GREEN
@@ -41,37 +43,41 @@ mod tests {
          // (x=0,y=0)            (x=1,y=0)
             0xFF, 0x00, 0x00,    0x00, 0xFF, 0x00,
          // (x=0,y=1)            (x=1,y=1)
-            0x00, 0x00, 0x00,    0x00, 0x00, 0xFF,
+            0xFF, 0xFF, 0xFF,    0x00, 0x00, 0xFF,
             ],
             None,
-            Some(&frame)).unwrap();
+            Some(&frame),
+            filter).unwrap();
         // BLACK RED
         // BLUE  GREEN
         encoder.write_frame(
             &[
-            0x00, 0x00, 0x00,   0xFF, 0x00, 0x00,
+            0xFF, 0xFF, 0xFF,   0xFF, 0x00, 0x00,
             0x00, 0x00, 0xFF,   0x00, 0xFF, 0x00,
             ],
             None,
-            Some(&frame)).unwrap();
+            Some(&frame),
+            filter).unwrap();
         // BLUE  BLACK
         // GREEN RED
         encoder.write_frame(
             &[
-            0x00, 0x00, 0xFF,   0x00, 0x00, 0x00,
+            0x00, 0x00, 0xFF,   0xFF, 0xFF, 0xFF,
             0x00, 0xFF, 0x00,   0xFF, 0x00, 0x00,
             ],
             None,
-            Some(&frame)).unwrap();
+            Some(&frame),
+            filter).unwrap();
         // GREEN BLUE
         // RED   BLACK
         encoder.write_frame(
             &[
             0x00, 0xFF, 0x00,   0x00, 0x00, 0xFF,
-            0xFF, 0x00, 0x00,   0x00, 0x00, 0x00,
+            0xFF, 0x00, 0x00,   0xFF, 0xFF, 0xFF,
             ],
             None,
-            Some(&frame)).unwrap();
+            Some(&frame),
+            filter).unwrap();
         // !!IMPORTANT DONT FORGET!!
         encoder.finish().unwrap();
     }

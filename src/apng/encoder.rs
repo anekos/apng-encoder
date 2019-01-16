@@ -50,7 +50,8 @@ use super::{Frame, Meta};
 ///     0x00, 0x00, 0x00,    0x00, 0x00, 0xFF,
 ///     ],
 ///     None,
-///     Some(&frame)).unwrap();
+///     Some(&frame),
+///     None).unwrap();
 /// // BLACK RED
 /// // BLUE  GREEN
 /// encoder.write_frame(
@@ -59,7 +60,8 @@ use super::{Frame, Meta};
 ///     0x00, 0x00, 0xFF,   0x00, 0xFF, 0x00,
 ///     ],
 ///     None,
-///     Some(&frame)).unwrap();
+///     Some(&frame),
+///     None).unwrap();
 /// // BLUE  BLACK
 /// // GREEN RED
 /// encoder.write_frame(
@@ -68,7 +70,8 @@ use super::{Frame, Meta};
 ///     0x00, 0xFF, 0x00,   0xFF, 0x00, 0x00,
 ///     ],
 ///     None,
-///     Some(&frame)).unwrap();
+///     Some(&frame),
+///     None).unwrap();
 /// // GREEN BLUE
 /// // RED   BLACK
 /// encoder.write_frame(
@@ -77,12 +80,12 @@ use super::{Frame, Meta};
 ///     0xFF, 0x00, 0x00,   0x00, 0x00, 0x00,
 ///     ],
 ///     None,
-///     Some(&frame)).unwrap();
+///     Some(&frame),
+///     None).unwrap();
 /// // !!IMPORTANT DONT FORGET!!
 /// encoder.finish().unwrap();
 /// ```
 
-const SIGNATURE: [u8;8] = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
 
 pub struct Encoder<'a, F: io::Write> {
@@ -91,6 +94,15 @@ pub struct Encoder<'a, F: io::Write> {
     sequence: u32,
     width: u32,
     writer: &'a mut F,
+}
+
+#[derive(Clone, Copy)]
+pub enum Filter {
+    None = 0,
+    Sub = 1,
+    Up = 2,
+    Average = 3,
+    Paeth = 4,
 }
 
 
@@ -114,11 +126,11 @@ impl<'a, F: io::Write> Encoder<'a, F> {
         self.write_chunk(b"IEND", &zero)
     }
 
-    pub fn write_frame(&mut self, image_data: &[u8], row_stride: Option<usize>, frame: Option<&Frame>) -> io::Result<()> {
+    pub fn write_frame(&mut self, image_data: &[u8], row_stride: Option<usize>, frame: Option<&Frame>, filter: Option<Filter>) -> io::Result<()> {
         if self.sequence == 0 {
-            self.write_default_image(image_data, row_stride, frame)
+            self.write_default_image(image_data, row_stride, frame, filter)
         } else {
-            self.write_animation_frame(image_data, row_stride, frame)
+            self.write_animation_frame(image_data, row_stride, frame, filter)
         }
     }
 
@@ -128,23 +140,50 @@ impl<'a, F: io::Write> Encoder<'a, F> {
         result
     }
 
-    fn write_animation_frame(&mut self, image_data: &[u8], row_stride: Option<usize>, frame: Option<&Frame>) -> io::Result<()> {
-        let width = self.write_frame_control(frame)?;
-
+    fn make_image_data(&mut self, image_data: &[u8], row_stride: Option<usize>, buffer: &mut Vec<u8>, width: u32, filter: Option<Filter>) -> io::Result<()> {
         let row_stride = row_stride.unwrap_or_else(|| width as usize * self.pixel_size);
 
-        let mut buffer = vec![];
-        buffer.write_u32::<BigEndian>(self.next_sequence())?;
-        buffer.flush()?;
-        let mut e = ZlibEncoder::new(&mut buffer, Compression::best());
-        for line in image_data.chunks(row_stride) {
-            e.write_all(&[0x00]).unwrap();
-            e.write_all(line).unwrap();
+        let mut e = ZlibEncoder::new(buffer, Compression::best());
+
+        match filter.unwrap_or(Filter::None) {
+            Filter::Average => panic!("Not implemented"),
+            Filter::None =>
+                for line in image_data.chunks(row_stride) {
+                    e.write_all(&[0x00])?;
+                    e.write_all(line)?;
+                },
+            Filter::Paeth => panic!("Not implemented"),
+            Filter::Sub => panic!("Not implemented"),
+            Filter::Up => {
+                let lines: Vec<&[u8]> = image_data.chunks(row_stride).collect();
+                let mut first = true;
+                for line in lines.windows(2) {
+                    if first {
+                        e.write_all(&[0x02])?;
+                        e.write_all(&line[0])?;
+                        first = false;
+                    }
+                    e.write_all(&[0x02])?;
+                    let mut buffer = Vec::<u8>::with_capacity(row_stride);
+                    for (i, prev) in line[0].iter().enumerate() {
+                        buffer.push(line[1][i].wrapping_sub(*prev));
+                    }
+                    e.write_all(&buffer)?;
+                }
+            },
         }
+
         e.finish().unwrap();
 
-        self.write_chunk(b"fdAT", &buffer)?;
+        Ok(())
+    }
 
+    fn write_animation_frame(&mut self, image_data: &[u8], row_stride: Option<usize>, frame: Option<&Frame>, filter: Option<Filter>) -> io::Result<()> {
+        let width = self.write_frame_control(frame)?;
+        let mut buffer = vec![];
+        buffer.write_u32::<BigEndian>(self.next_sequence())?;
+        self.make_image_data(image_data, row_stride, &mut buffer, width, filter)?;
+        self.write_chunk(b"fdAT", &buffer)?;
         Ok(())
     }
 
@@ -169,21 +208,11 @@ impl<'a, F: io::Write> Encoder<'a, F> {
         self.writer.write_u32::<BigEndian>(crc.sum() as u32)
     }
 
-    fn write_default_image(&mut self, image_data: &[u8], row_stride: Option<usize>, frame: Option<&Frame>) -> io::Result<()> {
+    fn write_default_image(&mut self, image_data: &[u8], row_stride: Option<usize>, frame: Option<&Frame>, filter: Option<Filter>) -> io::Result<()> {
         let width = self.write_frame_control(frame)?;
-
-        let row_stride = row_stride.unwrap_or_else(|| width as usize * self.pixel_size);
-
         let mut buffer = vec![];
-        let mut e = ZlibEncoder::new(&mut buffer, Compression::best());
-        for line in image_data.chunks(row_stride) {
-            e.write_all(&[0x00]).unwrap();
-            e.write_all(line).unwrap();
-        }
-        e.finish().unwrap();
-
+        self.make_image_data(image_data, row_stride, &mut buffer, width, filter)?;
         self.write_chunk(b"IDAT", &buffer)?;
-
         Ok(())
     }
 
@@ -220,7 +249,7 @@ impl<'a, F: io::Write> Encoder<'a, F> {
     }
 
     fn write_signature(&mut self) -> io::Result<()> {
-        self.writer.write(&SIGNATURE)?;
+        self.writer.write(&[0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])?;
         Ok(())
     }
 }

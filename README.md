@@ -43,7 +43,8 @@ encoder.write_frame(
     0x00, 0x00, 0x00,    0x00, 0x00, 0xFF,
     ],
     None,
-    Some(&frame)).unwrap();
+    Some(&frame),
+    None).unwrap();
 // BLACK RED
 // BLUE  GREEN
 encoder.write_frame(
@@ -52,7 +53,8 @@ encoder.write_frame(
     0x00, 0x00, 0xFF,   0x00, 0xFF, 0x00,
     ],
     None,
-    Some(&frame)).unwrap();
+    Some(&frame),
+    None).unwrap();
 // BLUE  BLACK
 // GREEN RED
 encoder.write_frame(
@@ -61,7 +63,8 @@ encoder.write_frame(
     0x00, 0xFF, 0x00,   0xFF, 0x00, 0x00,
     ],
     None,
-    Some(&frame)).unwrap();
+    Some(&frame),
+    None).unwrap();
 // GREEN BLUE
 // RED   BLACK
 encoder.write_frame(
@@ -70,7 +73,8 @@ encoder.write_frame(
     0xFF, 0x00, 0x00,   0x00, 0x00, 0x00,
     ],
     None,
-    Some(&frame)).unwrap();
+    Some(&frame),
+    None).unwrap();
 // !!IMPORTANT DONT FORGET!!
 encoder.finish().unwrap();
 ```
