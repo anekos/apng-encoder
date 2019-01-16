@@ -34,7 +34,7 @@ mod tests {
         };
 
         let mut file = File::create("test.png").unwrap();
-        let mut encoder = Encoder::new(&mut file, &meta).unwrap();
+        let mut encoder = Encoder::create(&mut file, &meta).unwrap();
 
         // RED   GREEN
         // BLACK BLUE

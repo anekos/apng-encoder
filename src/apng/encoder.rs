@@ -38,7 +38,7 @@ use super::{Frame, Meta};
 /// };
 ///
 /// let mut file = File::create("rgb-rotation.png").unwrap();
-/// let mut encoder = Encoder::new(&mut file, &meta).unwrap();
+/// let mut encoder = Encoder::create(&mut file, &meta).unwrap();
 ///
 /// // RED   GREEN
 /// // BLACK BLUE
@@ -107,7 +107,7 @@ pub enum Filter {
 
 
 impl<'a, F: io::Write> Encoder<'a, F> {
-    pub fn new(writer: &'a mut F, meta: &Meta) -> io::Result<Self> {
+    pub fn create(writer: &'a mut F, meta: &Meta) -> io::Result<Self> {
         let mut instance = Encoder {
             height: meta.height,
             pixel_size: meta.color.pixel_size(),
@@ -123,7 +123,7 @@ impl<'a, F: io::Write> Encoder<'a, F> {
 
     pub fn finish(mut self) -> io::Result<()> {
         let zero: [u8;0] = [];
-        self.write_chunk(b"IEND", &zero)
+        self.write_chunk(*b"IEND", &zero)
     }
 
     pub fn write_frame(&mut self, image_data: &[u8], row_stride: Option<usize>, frame: Option<&Frame>, filter: Option<Filter>) -> io::Result<()> {
@@ -183,7 +183,7 @@ impl<'a, F: io::Write> Encoder<'a, F> {
         let mut buffer = vec![];
         buffer.write_u32::<BigEndian>(self.next_sequence())?;
         self.make_image_data(image_data, row_stride, &mut buffer, width, filter)?;
-        self.write_chunk(b"fdAT", &buffer)?;
+        self.write_chunk(*b"fdAT", &buffer)?;
         Ok(())
     }
 
@@ -191,19 +191,19 @@ impl<'a, F: io::Write> Encoder<'a, F> {
         let mut buffer = vec![];
         buffer.write_u32::<BigEndian>(frames)?;
         buffer.write_u32::<BigEndian>(plays)?;
-        self.write_chunk(b"acTL", &buffer)
+        self.write_chunk(*b"acTL", &buffer)
     }
 
-    fn write_chunk(&mut self, chunk_type: &[u8;4], chunk_data: &[u8]) -> io::Result<()> {
+    fn write_chunk(&mut self, chunk_type: [u8;4], chunk_data: &[u8]) -> io::Result<()> {
         // Length
         self.writer.write_u32::<BigEndian>(chunk_data.len() as u32)?;
         // Type
-        self.writer.write(chunk_type)?;
+        self.writer.write_all(&chunk_type)?;
         // Data
-        self.writer.write(chunk_data)?;
+        self.writer.write_all(chunk_data)?;
         // CRC
         let mut crc = Crc::new();
-        crc.update(chunk_type);
+        crc.update(&chunk_type);
         crc.update(chunk_data);
         self.writer.write_u32::<BigEndian>(crc.sum() as u32)
     }
@@ -212,7 +212,7 @@ impl<'a, F: io::Write> Encoder<'a, F> {
         let width = self.write_frame_control(frame)?;
         let mut buffer = vec![];
         self.make_image_data(image_data, row_stride, &mut buffer, width, filter)?;
-        self.write_chunk(b"IDAT", &buffer)?;
+        self.write_chunk(*b"IDAT", &buffer)?;
         Ok(())
     }
 
@@ -234,7 +234,7 @@ impl<'a, F: io::Write> Encoder<'a, F> {
         buffer.write_u16::<BigEndian>(delay.numerator)?;
         buffer.write_u16::<BigEndian>(delay.denominator)?;
         buffer.write_all(&[dispose, blend])?;
-        self.write_chunk(b"fcTL", &buffer)?;
+        self.write_chunk(*b"fcTL", &buffer)?;
 
         Ok(width)
     }
@@ -244,12 +244,12 @@ impl<'a, F: io::Write> Encoder<'a, F> {
         buffer.write_u32::<BigEndian>(meta.width)?;
         buffer.write_u32::<BigEndian>(meta.height)?;
         // ... compression_method, filter_method, interlace_method
-        buffer.write(&[meta.color.bit_depth, meta.color.to_u8(), 0, 0, 0])?;
-        self.write_chunk(b"IHDR", &buffer)
+        buffer.write_all(&[meta.color.bit_depth, meta.color.to_u8(), 0, 0, 0])?;
+        self.write_chunk(*b"IHDR", &buffer)
     }
 
     fn write_signature(&mut self) -> io::Result<()> {
-        self.writer.write(&[0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])?;
+        self.writer.write_all(&[0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])?;
         Ok(())
     }
 }
