@@ -1,4 +1,9 @@
 
+#![cfg_attr(feature = "benchmark", allow(unstable_features))]
+#![cfg_attr(feature = "benchmark", feature(test))]
+
+#[cfg(feature = "benchmark")]
+extern crate test;
 
 pub mod apng;
 
@@ -6,15 +11,30 @@ pub mod apng;
 
 #[cfg(test)]
 mod tests {
-    #[test]
-    fn generate_4frames() {
-        use std::fs::{create_dir, File};
-        use image::png::PNGDecoder;
-        use image::ImageDecoder;
-        use crate::apng::{Color, Delay, Frame, Meta};
-        use crate::apng::encoder::{Encoder, Filter};
+    use std::fs::{create_dir, File};
+    use std::io::Write;
+
+    use image::ImageDecoder;
+    use image::png::PNGDecoder;
+
+    use crate::apng::encoder::{Encoder, Filter};
+    use crate::apng::{Color, Delay, Frame, Meta};
+
+    #[cfg(feature = "benchmark")]
+    use test::Bencher;
 
 
+    fn load_sources() -> Vec<Vec<u8>> {
+        let mut result = vec![];
+        for i in 1 ..= 4 {
+            let source_file = File::open(format!("test-files/{}.png", i)).unwrap();
+            let decoder = PNGDecoder::new(source_file).unwrap();
+            result.push(decoder.read_image().unwrap());
+        }
+        result
+    }
+
+    fn generate_png<F: Write>(file: &mut F, sources: &[Vec<u8>], filter: Option<Filter>) {
         // Generate 2x2 Animated PNG (4 frames)
         let meta = Meta {
             width: 716,
@@ -24,11 +44,9 @@ mod tests {
                 bit_depth: 8,
                 grayscale: false,
             },
-            frames: 4,
+            frames: sources.len() as u32,
             plays: None, // Infinite loop
         };
-
-        let filter = Some(Filter::Up);
 
         // Delay = 2 seconds
         let frame = Frame {
@@ -36,17 +54,38 @@ mod tests {
             ..Default::default()
         };
 
-        let mut file = File::create("test-output/cherenkov.png").unwrap();
-        let mut encoder = Encoder::create(&mut file, &meta).unwrap();
+        let mut encoder = Encoder::create(file, &meta).unwrap();
 
-        for i in 1 ..= 4 {
-            let source_file = File::open(format!("test-files/{}.png", i)).unwrap();
-            let _ = create_dir("test-output");
-            let decoder = PNGDecoder::new(source_file).unwrap();
-            let image = decoder.read_image().unwrap();
-            encoder.write_frame(&image, None, Some(&frame), filter).unwrap();
+        for source in sources {
+            encoder.write_frame(&source, None, Some(&frame), filter).unwrap();
         }
 
         encoder.finish().unwrap();
+    }
+
+    #[test]
+    fn test_generate_png() {
+        let sources = load_sources();
+        let _ = create_dir("test-output");
+        let mut file = File::create("test-output/cherenkov.png").unwrap();
+        generate_png(&mut file, &sources, None)
+    }
+
+    #[bench]#[cfg(feature = "benchmark")]
+    fn bench_with_up_filter(b: &mut Bencher) {
+        let sources = load_sources();
+        b.iter(|| {
+            let mut file = vec![];
+            generate_png(&mut file, &sources, Some(Filter::Up));
+        });
+    }
+
+    #[bench]#[cfg(feature = "benchmark")]
+    fn bench_without_filter(b: &mut Bencher) {
+        let sources = load_sources();
+        b.iter(|| {
+            let mut file = vec![];
+            generate_png(&mut file, &sources, Some(Filter::None));
+        });
     }
 }

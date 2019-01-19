@@ -4,6 +4,9 @@ version = "0.0.1"
 authors = ["anekos <anekos@snca.net>"]
 edition = "2018"
 
+[features]
+benchmark = []
+
 [dependencies]
 flate2 = "*"
 byteorder = "*"
