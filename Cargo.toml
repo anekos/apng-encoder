@@ -8,6 +8,9 @@ edition = "2018"
 flate2 = "*"
 byteorder = "*"
 
+[dev-dependencies]
+image = "*"
+
 [dev-dependencies.cargo-husky]
 version = "1"
 default-features = false
