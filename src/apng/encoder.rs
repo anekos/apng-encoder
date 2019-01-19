@@ -37,7 +37,7 @@ use super::{Frame, Meta};
 ///     ..Default::default()
 /// };
 ///
-/// let mut file = File::create("rgb-rotation.png").unwrap();
+/// let mut file = File::create("test-output/2x2.png").unwrap();
 /// let mut encoder = Encoder::create(&mut file, &meta).unwrap();
 ///
 /// // RED   GREEN
