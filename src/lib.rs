@@ -64,20 +64,27 @@ mod tests {
     }
 
     #[test]
-    fn test_generate_png() {
+    fn test_generate_png_without_filter() {
         let sources = load_sources();
         let _ = create_dir("test-output");
-        let mut file = File::create("test-output/cherenkov.png").unwrap();
+        let mut file = File::create("test-output/cherenkov-none.png").unwrap();
         generate_png(&mut file, &sources, None)
     }
 
-    #[bench]#[cfg(feature = "benchmark")]
-    fn bench_with_up_filter(b: &mut Bencher) {
+    #[test]
+    fn test_generate_png_with_average_filter() {
         let sources = load_sources();
-        b.iter(|| {
-            let mut file = vec![];
-            generate_png(&mut file, &sources, Some(Filter::Up));
-        });
+        let _ = create_dir("test-output");
+        let mut file = File::create("test-output/cherenkov-average.png").unwrap();
+        generate_png(&mut file, &sources, Some(Filter::Average))
+    }
+
+    #[test]
+    fn test_generate_png_with_up_filter() {
+        let sources = load_sources();
+        let _ = create_dir("test-output");
+        let mut file = File::create("test-output/cherenkov-up.png").unwrap();
+        generate_png(&mut file, &sources, Some(Filter::Up))
     }
 
     #[bench]#[cfg(feature = "benchmark")]
@@ -86,6 +93,23 @@ mod tests {
         b.iter(|| {
             let mut file = vec![];
             generate_png(&mut file, &sources, Some(Filter::None));
+        });
+    }
+
+    #[bench]#[cfg(feature = "benchmark")]
+    fn bench_with_average_filter(b: &mut Bencher) {
+        let sources = load_sources();
+        b.iter(|| {
+            let mut file = vec![];
+            generate_png(&mut file, &sources, Some(Filter::Average));
+        });
+    }
+    #[bench]#[cfg(feature = "benchmark")]
+    fn bench_with_up_filter(b: &mut Bencher) {
+        let sources = load_sources();
+        b.iter(|| {
+            let mut file = vec![];
+            generate_png(&mut file, &sources, Some(Filter::Up));
         });
     }
 }

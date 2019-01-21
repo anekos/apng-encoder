@@ -145,33 +145,15 @@ impl<'a, F: io::Write> Encoder<'a, F> {
 
         let mut e = ZlibEncoder::new(buffer, Compression::best());
 
-        match filter.unwrap_or(Filter::None) {
-            Filter::Average => panic!("Not implemented"),
-            Filter::None =>
-                for line in image_data.chunks(row_stride) {
-                    e.write_all(&[0x00])?;
-                    e.write_all(line)?;
-                },
+        let filter = match filter.unwrap_or(Filter::None) {
+            Filter::Average => filter_average,
+            Filter::None => filter_none,
             Filter::Paeth => panic!("Not implemented"),
             Filter::Sub => panic!("Not implemented"),
-            Filter::Up => {
-                let lines: Vec<&[u8]> = image_data.chunks(row_stride).collect();
-                let mut first = true;
-                for line in lines.windows(2) {
-                    if first {
-                        e.write_all(&[0x02])?;
-                        e.write_all(&line[0])?;
-                        first = false;
-                    }
-                    e.write_all(&[0x02])?;
-                    let mut buffer = Vec::<u8>::with_capacity(row_stride);
-                    for (i, prev) in line[0].iter().enumerate() {
-                        buffer.push(line[1][i].wrapping_sub(*prev));
-                    }
-                    e.write_all(&buffer)?;
-                }
-            },
-        }
+            Filter::Up => filter_up,
+        };
+
+        filter(image_data, row_stride, self.pixel_size, &mut e)?;
 
         e.finish().unwrap();
 
@@ -252,4 +234,59 @@ impl<'a, F: io::Write> Encoder<'a, F> {
         self.writer.write_all(&[0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])?;
         Ok(())
     }
+}
+
+
+fn filter_none<E: Write>(image_data: &[u8], row_stride: usize, _pixel_size: usize, e: &mut E) -> io::Result<()> {
+    for line in image_data.chunks(row_stride) {
+        e.write_all(&[0x00])?;
+        e.write_all(line)?;
+    }
+    Ok(())
+}
+
+fn filter_up<E: Write>(image_data: &[u8], row_stride: usize, _pixel_size: usize, e: &mut E) -> io::Result<()> {
+    let lines: Vec<&[u8]> = image_data.chunks(row_stride).collect();
+    let mut buffer = Vec::<u8>::with_capacity(row_stride);
+    buffer.resize(row_stride, 0);
+
+    e.write_all(&[0x02])?;
+    e.write_all(&lines[0])?;
+
+    for line in lines.windows(2) {
+        e.write_all(&[0x02])?;
+        for (i, it) in buffer.iter_mut().enumerate().take(row_stride) {
+            *it = line[1][i].wrapping_sub(line[0][i]);
+        }
+        e.write_all(&buffer)?;
+    }
+
+    Ok(())
+}
+
+fn filter_average<E: Write>(image_data: &[u8], row_stride: usize, pixel_size: usize, e: &mut E) -> io::Result<()> {
+    let lines: Vec<&[u8]> = image_data.chunks(row_stride).collect();
+    let mut buffer = Vec::<u8>::with_capacity(row_stride);
+    buffer.resize(row_stride, 0);
+
+    e.write_all(&[0x03])?;
+    buffer[..pixel_size].clone_from_slice(&lines[0][..pixel_size]);
+    for (i, it) in buffer.iter_mut().enumerate().take(row_stride).skip(pixel_size) {
+        *it = lines[0][i].wrapping_sub(lines[0][i - pixel_size] / 2);
+    }
+    e.write_all(&buffer)?;
+
+    for line in lines.windows(2) {
+        e.write_all(&[0x03])?;
+        for (i, it) in buffer.iter_mut().enumerate().take(pixel_size) {
+            *it = line[1][i].wrapping_sub(line[0][i] / 2);
+        }
+        for (i, it) in buffer.iter_mut().enumerate().take(row_stride).skip(pixel_size) {
+            let sum = (i16::from(line[1][i - pixel_size]) + i16::from(line[0][i])) / 2;
+            *it = line[1][i].wrapping_sub(sum as u8);
+        }
+        e.write_all(&buffer)?;
+    }
+
+    Ok(())
 }
