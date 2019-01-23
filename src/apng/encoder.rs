@@ -1,7 +1,9 @@
 
+use std::cmp;
 use std::io::{self, Write};
 
 use byteorder::{BigEndian, WriteBytesExt};
+use enum_iterator::IntoEnumIterator;
 use flate2::Compression;
 use flate2::Crc;
 use flate2::write::ZlibEncoder;
@@ -96,7 +98,7 @@ pub struct Encoder<'a, F: io::Write> {
     writer: &'a mut F,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, IntoEnumIterator)]
 pub enum Filter {
     None = 0,
     Sub = 1,
@@ -142,21 +144,10 @@ impl<'a, F: io::Write> Encoder<'a, F> {
 
     fn make_image_data(&mut self, image_data: &[u8], row_stride: Option<usize>, buffer: &mut Vec<u8>, width: u32, filter: Option<Filter>) -> io::Result<()> {
         let row_stride = row_stride.unwrap_or_else(|| width as usize * self.pixel_size);
-
         let mut e = ZlibEncoder::new(buffer, Compression::best());
-
-        let filter = match filter.unwrap_or(Filter::None) {
-            Filter::Average => filter_average,
-            Filter::None => filter_none,
-            Filter::Paeth => filter_paeth,
-            Filter::Sub => filter_sub,
-            Filter::Up => filter_up,
-        };
-
-        filter(image_data, row_stride, self.pixel_size, &mut e)?;
-
-        e.finish().unwrap();
-
+        let filter = filter.map(Ok).unwrap_or_else(|| infer_best_filter(image_data, row_stride, self.pixel_size))?;
+        filter.apply(image_data, row_stride, self.pixel_size, &mut e)?;
+        e.finish()?;
         Ok(())
     }
 
@@ -233,6 +224,20 @@ impl<'a, F: io::Write> Encoder<'a, F> {
     fn write_signature(&mut self) -> io::Result<()> {
         self.writer.write_all(&[0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])?;
         Ok(())
+    }
+}
+
+
+impl Filter {
+    fn apply<E: Write>(self, image_data: &[u8], row_stride: usize, pixel_size: usize, e: &mut E) -> io::Result<()> {
+        let f = match self {
+            Filter::Average => filter_average,
+            Filter::None => filter_none,
+            Filter::Paeth => filter_paeth,
+            Filter::Sub => filter_sub,
+            Filter::Up => filter_up,
+        };
+        f(image_data, row_stride, pixel_size, e)
     }
 }
 
@@ -352,4 +357,38 @@ fn filter_paeth<E: Write>(image_data: &[u8], row_stride: usize, pixel_size: usiz
     }
 
     Ok(())
+}
+
+fn get_compressed_size(filter: Filter, image_data: &[u8], row_stride: usize, pixel_size: usize) -> io::Result<usize> {
+    let mut out = vec![];
+    filter.apply(image_data, row_stride, pixel_size, &mut out)?;
+    Ok(out.len())
+}
+
+fn infer_best_filter(image_data: &[u8], row_stride: usize, pixel_size: usize) -> io::Result<Filter> {
+    let mut tiny_image_data = vec![];
+    let len = image_data.len();
+    let lines = len / row_stride;
+
+    if 50 < lines {
+        let top_end = row_stride * 10;
+        let middle_start = cmp::max(top_end, lines / 2 * row_stride);
+        let middle_end = cmp::min(middle_start + 10 * row_stride, len);
+        let bottom_start = cmp::max(middle_end, (cmp::max(lines, 10) - 10) * row_stride);
+
+        tiny_image_data.extend_from_slice(&image_data[0 .. top_end]);
+        tiny_image_data.extend_from_slice(&image_data[middle_start .. middle_end]);
+        tiny_image_data.extend_from_slice(&image_data[bottom_start .. image_data.len()]);
+    } else {
+        tiny_image_data.extend_from_slice(&image_data[0 .. cmp::min(10, lines) * row_stride]);
+    }
+
+
+    let mut results = vec![];
+    for filter in Filter::into_enum_iter() {
+        let size = get_compressed_size(filter, &tiny_image_data, row_stride, pixel_size)?;
+        results.push((filter, size));
+    }
+
+    Ok(results.iter().max_by_key(|it| it.1).unwrap().0)
 }

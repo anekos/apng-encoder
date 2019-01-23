@@ -8,8 +8,10 @@ edition = "2018"
 benchmark = []
 
 [dependencies]
-flate2 = "*"
 byteorder = "*"
+enum-iterator = "*"
+enum-iterator-derive = "*"
+flate2 = "*"
 
 [dev-dependencies]
 image = "*"

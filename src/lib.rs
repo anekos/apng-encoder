@@ -66,11 +66,11 @@ mod tests {
         encoder.finish().unwrap();
     }
 
-    fn test_generate_png(filename: &str, filter: Filter) {
+    fn test_generate_png(filename: &str, filter: Option<Filter>) {
         let (meta, sources) = load_sources();
         let _ = create_dir("test-output");
         let mut file = File::create(format!("test-output/{}", filename)).unwrap();
-        generate_png(&mut file, &sources, &meta, Some(filter))
+        generate_png(&mut file, &sources, &meta, filter)
 
     }
 
@@ -85,27 +85,32 @@ mod tests {
 
     #[test]
     fn test_generate_png_without_filter() {
-        test_generate_png("cherenkov-none.png", Filter::None);
+        test_generate_png("cherenkov-none.png", Some(Filter::None));
     }
 
     #[test]
     fn test_generate_png_with_sub_filter() {
-        test_generate_png("cherenkov-sub.png", Filter::Sub);
+        test_generate_png("cherenkov-sub.png", Some(Filter::Sub));
     }
 
     #[test]
     fn test_generate_png_with_up_filter() {
-        test_generate_png("cherenkov-up.png", Filter::Up);
+        test_generate_png("cherenkov-up.png", Some(Filter::Up));
     }
 
     #[test]
     fn test_generate_png_with_average_filter() {
-        test_generate_png("cherenkov-average.png", Filter::Average);
+        test_generate_png("cherenkov-average.png", Some(Filter::Average));
     }
 
     #[test]
     fn test_generate_png_with_paeth_filter() {
-        test_generate_png("cherenkov-paeth.png", Filter::Paeth);
+        test_generate_png("cherenkov-paeth.png", Some(Filter::Paeth));
+    }
+
+    #[test]
+    fn test_generate_png_with_inferred_filter() {
+        test_generate_png("cherenkov-infer.png", None);
     }
 
     #[bench]#[cfg(feature = "benchmark")]
