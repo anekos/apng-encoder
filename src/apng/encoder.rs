@@ -149,7 +149,7 @@ impl<'a, F: io::Write> Encoder<'a, F> {
             Filter::Average => filter_average,
             Filter::None => filter_none,
             Filter::Paeth => panic!("Not implemented"),
-            Filter::Sub => panic!("Not implemented"),
+            Filter::Sub => filter_sub,
             Filter::Up => filter_up,
         };
 
@@ -242,6 +242,22 @@ fn filter_none<E: Write>(image_data: &[u8], row_stride: usize, _pixel_size: usiz
         e.write_all(&[0x00])?;
         e.write_all(line)?;
     }
+    Ok(())
+}
+
+fn filter_sub<E: Write>(image_data: &[u8], row_stride: usize, pixel_size: usize, e: &mut E) -> io::Result<()> {
+    let mut buffer = Vec::<u8>::with_capacity(row_stride);
+    buffer.resize(row_stride, 0);
+
+    for line in image_data.chunks(row_stride) {
+        e.write_all(&[0x01])?;
+        buffer[..pixel_size].clone_from_slice(&line[..pixel_size]);
+        for (i, it) in buffer.iter_mut().enumerate().take(row_stride).skip(pixel_size) {
+            *it = line[i].wrapping_sub(line[i - pixel_size]);
+        }
+        e.write_all(&buffer)?;
+    }
+
     Ok(())
 }
 

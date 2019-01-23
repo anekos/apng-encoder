@@ -72,11 +72,11 @@ mod tests {
     }
 
     #[test]
-    fn test_generate_png_with_average_filter() {
+    fn test_generate_png_with_sub_filter() {
         let sources = load_sources();
         let _ = create_dir("test-output");
-        let mut file = File::create("test-output/cherenkov-average.png").unwrap();
-        generate_png(&mut file, &sources, Some(Filter::Average))
+        let mut file = File::create("test-output/cherenkov-sub.png").unwrap();
+        generate_png(&mut file, &sources, Some(Filter::Sub))
     }
 
     #[test]
@@ -85,6 +85,14 @@ mod tests {
         let _ = create_dir("test-output");
         let mut file = File::create("test-output/cherenkov-up.png").unwrap();
         generate_png(&mut file, &sources, Some(Filter::Up))
+    }
+
+    #[test]
+    fn test_generate_png_with_average_filter() {
+        let sources = load_sources();
+        let _ = create_dir("test-output");
+        let mut file = File::create("test-output/cherenkov-average.png").unwrap();
+        generate_png(&mut file, &sources, Some(Filter::Average))
     }
 
     #[bench]#[cfg(feature = "benchmark")]
@@ -97,19 +105,29 @@ mod tests {
     }
 
     #[bench]#[cfg(feature = "benchmark")]
-    fn bench_with_average_filter(b: &mut Bencher) {
+    fn bench_with_sub_filter(b: &mut Bencher) {
         let sources = load_sources();
         b.iter(|| {
             let mut file = vec![];
-            generate_png(&mut file, &sources, Some(Filter::Average));
+            generate_png(&mut file, &sources, Some(Filter::Sub));
         });
     }
+
     #[bench]#[cfg(feature = "benchmark")]
     fn bench_with_up_filter(b: &mut Bencher) {
         let sources = load_sources();
         b.iter(|| {
             let mut file = vec![];
             generate_png(&mut file, &sources, Some(Filter::Up));
+        });
+    }
+
+    #[bench]#[cfg(feature = "benchmark")]
+    fn bench_with_average_filter(b: &mut Bencher) {
+        let sources = load_sources();
+        b.iter(|| {
+            let mut file = vec![];
+            generate_png(&mut file, &sources, Some(Filter::Average));
         });
     }
 }
