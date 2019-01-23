@@ -24,110 +24,102 @@ mod tests {
     use test::Bencher;
 
 
-    fn load_sources() -> Vec<Vec<u8>> {
-        let mut result = vec![];
-        for i in 1 ..= 4 {
-            let source_file = File::open(format!("test-files/{}.png", i)).unwrap();
-            let decoder = PNGDecoder::new(source_file).unwrap();
-            result.push(decoder.read_image().unwrap());
-        }
-        result
-    }
-
-    fn generate_png<F: Write>(file: &mut F, sources: &[Vec<u8>], filter: Option<Filter>) {
-        // Generate 2x2 Animated PNG (4 frames)
+    fn load_source(filepath: &str) -> (Meta, Vec<u8>) {
+        let source_file = File::open(filepath).unwrap();
+        let decoder = PNGDecoder::new(source_file).unwrap();
+        let (width, height) = decoder.dimensions();
         let meta = Meta {
-            width: 716,
-            height: 660,
+            width: width as u32,
+            height: height as u32,
             color: Color {
                 alpha_channel: false,
                 bit_depth: 8,
                 grayscale: false,
             },
-            frames: sources.len() as u32,
+            frames: 0,
             plays: None, // Infinite loop
         };
+        (meta, decoder.read_image().unwrap())
+    }
 
+
+    fn load_sources() -> (Meta, Vec<Vec<u8>>) {
+        let (mut meta, image_data) = load_source("test-files/1.png");
+        let mut result = vec![image_data];
+        meta.frames = 4;
+
+        for i in 2 ..= 4 {
+            let (_, image_data) = load_source(&format!("test-files/{}.png", i));
+            result.push(image_data);
+        }
+
+        (meta, result)
+    }
+
+    fn generate_png<F: Write>(file: &mut F, sources: &[Vec<u8>], meta: &Meta, filter: Option<Filter>) {
         // Delay = 2 seconds
-        let frame = Frame {
-            delay: Some(Delay::new(1, 10)),
-            ..Default::default()
-        };
-
+        let frame = Frame { delay: Some(Delay::new(1, 10)), ..Default::default() };
         let mut encoder = Encoder::create(file, &meta).unwrap();
-
         for source in sources {
             encoder.write_frame(&source, None, Some(&frame), filter).unwrap();
         }
-
         encoder.finish().unwrap();
+    }
+
+    fn test_generate_png(filename: &str, filter: Filter) {
+        let (meta, sources) = load_sources();
+        let _ = create_dir("test-output");
+        let mut file = File::create(format!("test-output/{}", filename)).unwrap();
+        generate_png(&mut file, &sources, &meta, Some(filter))
+
+    }
+
+    #[cfg(feature = "benchmark")]
+    fn bench_generate_png(b: &mut Bencher, filter: Filter) {
+        let (meta, sources) = load_sources();
+        b.iter(|| {
+            let mut file = vec![];
+            generate_png(&mut file, &sources, &meta, Some(filter));
+        });
     }
 
     #[test]
     fn test_generate_png_without_filter() {
-        let sources = load_sources();
-        let _ = create_dir("test-output");
-        let mut file = File::create("test-output/cherenkov-none.png").unwrap();
-        generate_png(&mut file, &sources, None)
+        test_generate_png("cherenkov-none.png", Filter::None);
     }
 
     #[test]
     fn test_generate_png_with_sub_filter() {
-        let sources = load_sources();
-        let _ = create_dir("test-output");
-        let mut file = File::create("test-output/cherenkov-sub.png").unwrap();
-        generate_png(&mut file, &sources, Some(Filter::Sub))
+        test_generate_png("cherenkov-sub.png", Filter::Sub);
     }
 
     #[test]
     fn test_generate_png_with_up_filter() {
-        let sources = load_sources();
-        let _ = create_dir("test-output");
-        let mut file = File::create("test-output/cherenkov-up.png").unwrap();
-        generate_png(&mut file, &sources, Some(Filter::Up))
+        test_generate_png("cherenkov-up.png", Filter::Up);
     }
 
     #[test]
     fn test_generate_png_with_average_filter() {
-        let sources = load_sources();
-        let _ = create_dir("test-output");
-        let mut file = File::create("test-output/cherenkov-average.png").unwrap();
-        generate_png(&mut file, &sources, Some(Filter::Average))
+        test_generate_png("cherenkov-average.png", Filter::Average);
     }
 
     #[bench]#[cfg(feature = "benchmark")]
     fn bench_without_filter(b: &mut Bencher) {
-        let sources = load_sources();
-        b.iter(|| {
-            let mut file = vec![];
-            generate_png(&mut file, &sources, Some(Filter::None));
-        });
+        bench_generate_png(b, Filter::None);
     }
 
     #[bench]#[cfg(feature = "benchmark")]
     fn bench_with_sub_filter(b: &mut Bencher) {
-        let sources = load_sources();
-        b.iter(|| {
-            let mut file = vec![];
-            generate_png(&mut file, &sources, Some(Filter::Sub));
-        });
+        bench_generate_png(b, Filter::Sub);
     }
 
     #[bench]#[cfg(feature = "benchmark")]
     fn bench_with_up_filter(b: &mut Bencher) {
-        let sources = load_sources();
-        b.iter(|| {
-            let mut file = vec![];
-            generate_png(&mut file, &sources, Some(Filter::Up));
-        });
+        bench_generate_png(b, Filter::Up);
     }
 
     #[bench]#[cfg(feature = "benchmark")]
     fn bench_with_average_filter(b: &mut Bencher) {
-        let sources = load_sources();
-        b.iter(|| {
-            let mut file = vec![];
-            generate_png(&mut file, &sources, Some(Filter::Average));
-        });
+        bench_generate_png(b, Filter::Average);
     }
 }
