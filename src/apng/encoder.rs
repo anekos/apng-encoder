@@ -148,7 +148,7 @@ impl<'a, F: io::Write> Encoder<'a, F> {
         let filter = match filter.unwrap_or(Filter::None) {
             Filter::Average => filter_average,
             Filter::None => filter_none,
-            Filter::Paeth => panic!("Not implemented"),
+            Filter::Paeth => filter_paeth,
             Filter::Sub => filter_sub,
             Filter::Up => filter_up,
         };
@@ -300,6 +300,53 @@ fn filter_average<E: Write>(image_data: &[u8], row_stride: usize, pixel_size: us
         for (i, it) in buffer.iter_mut().enumerate().take(row_stride).skip(pixel_size) {
             let sum = (i16::from(line[1][i - pixel_size]) + i16::from(line[0][i])) / 2;
             *it = line[1][i].wrapping_sub(sum as u8);
+        }
+        e.write_all(&buffer)?;
+    }
+
+    Ok(())
+}
+
+fn filter_paeth<E: Write>(image_data: &[u8], row_stride: usize, pixel_size: usize, e: &mut E) -> io::Result<()> {
+    fn paeth(left: u8, up_left: u8, up: u8) -> u8 {
+        let w_left = i16::from(left);
+        let w_up = i16::from(up);
+        let w_up_left = i16::from(up_left);
+
+        let base = w_left + w_up - w_up_left;
+        let d_left = (base - w_left).abs();
+        let d_up = (base - w_up).abs();
+        let d_up_left = (base - w_up_left).abs();
+
+        if d_left <= d_up && d_left <= d_up_left {
+            return left;
+        }
+
+        if d_up <= d_up_left {
+            return up;
+        }
+
+        up_left
+    }
+
+    let lines: Vec<&[u8]> = image_data.chunks(row_stride).collect();
+    let mut buffer = Vec::<u8>::with_capacity(row_stride);
+    buffer.resize(row_stride, 0);
+
+    e.write_all(&[0x04])?;
+    buffer[..pixel_size].clone_from_slice(&lines[0][..pixel_size]);
+    for (i, it) in buffer.iter_mut().enumerate().take(row_stride).skip(pixel_size) {
+        *it = lines[0][i].wrapping_sub(paeth(lines[0][i - pixel_size], 0, 0));
+    }
+    e.write_all(&buffer)?;
+
+    for line in lines.windows(2) {
+        e.write_all(&[0x04])?;
+        for (i, it) in buffer.iter_mut().enumerate().take(pixel_size) {
+            *it = line[1][i].wrapping_sub(paeth(0, 0, line[0][i]));
+        }
+        for (i, it) in buffer.iter_mut().enumerate().take(row_stride).skip(pixel_size) {
+            *it = line[1][i].wrapping_sub(paeth(line[1][i - pixel_size], line[0][i - pixel_size], line[0][i]));
         }
         e.write_all(&buffer)?;
     }

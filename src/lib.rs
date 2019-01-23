@@ -103,6 +103,11 @@ mod tests {
         test_generate_png("cherenkov-average.png", Filter::Average);
     }
 
+    #[test]
+    fn test_generate_png_with_paeth_filter() {
+        test_generate_png("cherenkov-paeth.png", Filter::Paeth);
+    }
+
     #[bench]#[cfg(feature = "benchmark")]
     fn bench_without_filter(b: &mut Bencher) {
         bench_generate_png(b, Filter::None);
@@ -121,5 +126,10 @@ mod tests {
     #[bench]#[cfg(feature = "benchmark")]
     fn bench_with_average_filter(b: &mut Bencher) {
         bench_generate_png(b, Filter::Average);
+    }
+
+    #[bench]#[cfg(feature = "benchmark")]
+    fn bench_with_paeth_filter(b: &mut Bencher) {
+        bench_generate_png(b, Filter::Paeth);
     }
 }
