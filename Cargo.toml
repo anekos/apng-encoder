@@ -11,6 +11,7 @@ benchmark = []
 byteorder = "*"
 enum-iterator = "*"
 enum-iterator-derive = "*"
+failure = "*"
 flate2 = "*"
 
 [dev-dependencies]
