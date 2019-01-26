@@ -8,7 +8,8 @@ use flate2::Compression;
 use flate2::Crc;
 use flate2::write::ZlibEncoder;
 
-use super::{Frame, Meta};
+use super::{Color, Frame, Meta};
+use super::errors::{ApngResult, ErrorKind};
 
 
 /// APNG Encoder
@@ -24,11 +25,7 @@ use super::{Frame, Meta};
 /// let meta = Meta {
 ///     width: 2,
 ///     height: 2,
-///     color: Color {
-///         alpha_channel: false,
-///         bit_depth: 8,
-///         grayscale: false,
-///     },
+///     color: Color::RGB(8),
 ///     frames: 4,
 ///     plays: None, // Infinite loop
 /// };
@@ -92,7 +89,7 @@ use super::{Frame, Meta};
 
 pub struct Encoder<'a, F: io::Write> {
     height: u32,
-    pixel_size: usize,
+    pixel_bytes: usize,
     sequence: u32,
     width: u32,
     writer: &'a mut F,
@@ -109,10 +106,11 @@ pub enum Filter {
 
 
 impl<'a, F: io::Write> Encoder<'a, F> {
-    pub fn create(writer: &'a mut F, meta: &Meta) -> io::Result<Self> {
+    pub fn create(writer: &'a mut F, meta: &Meta) -> ApngResult<Self> {
+        validate_color(&meta.color)?;
         let mut instance = Encoder {
             height: meta.height,
-            pixel_size: meta.color.pixel_size(),
+            pixel_bytes: meta.color.pixel_bytes(),
             sequence: 0,
             width: meta.width,
             writer,
@@ -123,12 +121,12 @@ impl<'a, F: io::Write> Encoder<'a, F> {
         Ok(instance)
     }
 
-    pub fn finish(mut self) -> io::Result<()> {
+    pub fn finish(mut self) -> ApngResult<()> {
         let zero: [u8;0] = [];
         self.write_chunk(*b"IEND", &zero)
     }
 
-    pub fn write_frame(&mut self, image_data: &[u8], row_stride: Option<usize>, frame: Option<&Frame>, filter: Option<Filter>) -> io::Result<()> {
+    pub fn write_frame(&mut self, image_data: &[u8], row_stride: Option<usize>, frame: Option<&Frame>, filter: Option<Filter>) -> ApngResult<()> {
         if self.sequence == 0 {
             self.write_default_image(image_data, row_stride, frame, filter)
         } else {
@@ -142,16 +140,28 @@ impl<'a, F: io::Write> Encoder<'a, F> {
         result
     }
 
-    fn make_image_data(&mut self, image_data: &[u8], row_stride: Option<usize>, buffer: &mut Vec<u8>, width: u32, filter: Option<Filter>) -> io::Result<()> {
-        let row_stride = row_stride.unwrap_or_else(|| width as usize * self.pixel_size);
+    fn make_image_data(&mut self, image_data: &[u8], row_stride: Option<usize>, buffer: &mut Vec<u8>, width: u32, filter: Option<Filter>) -> ApngResult<()> {
+        let row_stride = self.compute_row_stride(&image_data, row_stride, width)?;
         let mut e = ZlibEncoder::new(buffer, Compression::best());
-        let filter = filter.map(Ok).unwrap_or_else(|| infer_best_filter(image_data, row_stride, self.pixel_size))?;
-        filter.apply(image_data, row_stride, self.pixel_size, &mut e)?;
+        let filter = filter.map(Ok).unwrap_or_else(|| infer_best_filter(image_data, row_stride, self.pixel_bytes))?;
+        filter.apply(image_data, row_stride, self.pixel_bytes, &mut e)?;
         e.finish()?;
         Ok(())
     }
 
-    fn write_animation_frame(&mut self, image_data: &[u8], row_stride: Option<usize>, frame: Option<&Frame>, filter: Option<Filter>) -> io::Result<()> {
+    fn compute_row_stride(&self, image_data: &[u8], row_stride: Option<usize>, width: u32) -> ApngResult<usize> {
+        if self.width < width {
+            return Err(ErrorKind::TooLargeImage)?;
+        }
+        let row_stride = row_stride.unwrap_or_else(|| width as usize * self.pixel_bytes);
+        let height = image_data.len() / row_stride;
+        if self.height < height as u32 {
+            return Err(ErrorKind::TooLargeImage)?;
+        }
+        Ok(row_stride)
+    }
+
+    fn write_animation_frame(&mut self, image_data: &[u8], row_stride: Option<usize>, frame: Option<&Frame>, filter: Option<Filter>) -> ApngResult<()> {
         let width = self.write_frame_control(frame)?;
         let mut buffer = vec![];
         buffer.write_u32::<BigEndian>(self.next_sequence())?;
@@ -160,14 +170,14 @@ impl<'a, F: io::Write> Encoder<'a, F> {
         Ok(())
     }
 
-    fn write_animation_control(&mut self, frames: u32, plays: u32) -> io::Result<()> {
+    fn write_animation_control(&mut self, frames: u32, plays: u32) -> ApngResult<()> {
         let mut buffer = vec![];
         buffer.write_u32::<BigEndian>(frames)?;
         buffer.write_u32::<BigEndian>(plays)?;
         self.write_chunk(*b"acTL", &buffer)
     }
 
-    fn write_chunk(&mut self, chunk_type: [u8;4], chunk_data: &[u8]) -> io::Result<()> {
+    fn write_chunk(&mut self, chunk_type: [u8;4], chunk_data: &[u8]) -> ApngResult<()> {
         // Length
         self.writer.write_u32::<BigEndian>(chunk_data.len() as u32)?;
         // Type
@@ -178,10 +188,11 @@ impl<'a, F: io::Write> Encoder<'a, F> {
         let mut crc = Crc::new();
         crc.update(&chunk_type);
         crc.update(chunk_data);
-        self.writer.write_u32::<BigEndian>(crc.sum() as u32)
+        self.writer.write_u32::<BigEndian>(crc.sum() as u32)?;
+        Ok(())
     }
 
-    fn write_default_image(&mut self, image_data: &[u8], row_stride: Option<usize>, frame: Option<&Frame>, filter: Option<Filter>) -> io::Result<()> {
+    fn write_default_image(&mut self, image_data: &[u8], row_stride: Option<usize>, frame: Option<&Frame>, filter: Option<Filter>) -> ApngResult<()> {
         let width = self.write_frame_control(frame)?;
         let mut buffer = vec![];
         self.make_image_data(image_data, row_stride, &mut buffer, width, filter)?;
@@ -189,7 +200,7 @@ impl<'a, F: io::Write> Encoder<'a, F> {
         Ok(())
     }
 
-    fn write_frame_control(&mut self, frame: Option<&Frame>) -> io::Result<u32> {
+    fn write_frame_control(&mut self, frame: Option<&Frame>) -> ApngResult<u32> {
         let width = frame.and_then(|it| it.width).unwrap_or(self.width);
         let height = frame.and_then(|it| it.height).unwrap_or(self.height);
         let x = frame.and_then(|it| it.x).unwrap_or(0);
@@ -212,16 +223,25 @@ impl<'a, F: io::Write> Encoder<'a, F> {
         Ok(width)
     }
 
-    fn write_image_header(&mut self, meta: &Meta) -> io::Result<()> {
+    fn write_image_header(&mut self, meta: &Meta) -> ApngResult<()> {
+        use super::Color::*;
+
         let mut buffer = vec![];
         buffer.write_u32::<BigEndian>(meta.width)?;
         buffer.write_u32::<BigEndian>(meta.height)?;
+        // Alpha - Color - Palette
+        let color_type = match meta.color {
+            Grayscale(_) => 0b000,
+            GrayscaleA(_) => 0b100,
+            RGB(_) => 0b010,
+            RGBA(_) => 0b110,
+        };
         // ... compression_method, filter_method, interlace_method
-        buffer.write_all(&[meta.color.bit_depth, meta.color.to_u8(), 0, 0, 0])?;
+        buffer.write_all(&[meta.color.bit_depth(), color_type, 0, 0, 0])?;
         self.write_chunk(*b"IHDR", &buffer)
     }
 
-    fn write_signature(&mut self) -> io::Result<()> {
+    fn write_signature(&mut self) -> ApngResult<()> {
         self.writer.write_all(&[0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])?;
         Ok(())
     }
@@ -229,7 +249,7 @@ impl<'a, F: io::Write> Encoder<'a, F> {
 
 
 impl Filter {
-    fn apply<E: Write>(self, image_data: &[u8], row_stride: usize, pixel_size: usize, e: &mut E) -> io::Result<()> {
+    fn apply<E: Write>(self, image_data: &[u8], row_stride: usize, pixel_bytes: usize, e: &mut E) -> ApngResult<()> {
         let f = match self {
             Filter::Average => filter_average,
             Filter::None => filter_none,
@@ -237,12 +257,12 @@ impl Filter {
             Filter::Sub => filter_sub,
             Filter::Up => filter_up,
         };
-        f(image_data, row_stride, pixel_size, e)
+        f(image_data, row_stride, pixel_bytes, e)
     }
 }
 
 
-fn filter_none<E: Write>(image_data: &[u8], row_stride: usize, _pixel_size: usize, e: &mut E) -> io::Result<()> {
+fn filter_none<E: Write>(image_data: &[u8], row_stride: usize, _pixel_bytes: usize, e: &mut E) -> ApngResult<()> {
     for line in image_data.chunks(row_stride) {
         e.write_all(&[0x00])?;
         e.write_all(line)?;
@@ -250,15 +270,15 @@ fn filter_none<E: Write>(image_data: &[u8], row_stride: usize, _pixel_size: usiz
     Ok(())
 }
 
-fn filter_sub<E: Write>(image_data: &[u8], row_stride: usize, pixel_size: usize, e: &mut E) -> io::Result<()> {
+fn filter_sub<E: Write>(image_data: &[u8], row_stride: usize, pixel_bytes: usize, e: &mut E) -> ApngResult<()> {
     let mut buffer = Vec::<u8>::with_capacity(row_stride);
     buffer.resize(row_stride, 0);
 
     for line in image_data.chunks(row_stride) {
         e.write_all(&[0x01])?;
-        buffer[..pixel_size].clone_from_slice(&line[..pixel_size]);
-        for (i, it) in buffer.iter_mut().enumerate().take(row_stride).skip(pixel_size) {
-            *it = line[i].wrapping_sub(line[i - pixel_size]);
+        buffer[..pixel_bytes].clone_from_slice(&line[..pixel_bytes]);
+        for (i, it) in buffer.iter_mut().enumerate().take(row_stride).skip(pixel_bytes) {
+            *it = line[i].wrapping_sub(line[i - pixel_bytes]);
         }
         e.write_all(&buffer)?;
     }
@@ -266,7 +286,7 @@ fn filter_sub<E: Write>(image_data: &[u8], row_stride: usize, pixel_size: usize,
     Ok(())
 }
 
-fn filter_up<E: Write>(image_data: &[u8], row_stride: usize, _pixel_size: usize, e: &mut E) -> io::Result<()> {
+fn filter_up<E: Write>(image_data: &[u8], row_stride: usize, _pixel_bytes: usize, e: &mut E) -> ApngResult<()> {
     let lines: Vec<&[u8]> = image_data.chunks(row_stride).collect();
     let mut buffer = Vec::<u8>::with_capacity(row_stride);
     buffer.resize(row_stride, 0);
@@ -285,25 +305,25 @@ fn filter_up<E: Write>(image_data: &[u8], row_stride: usize, _pixel_size: usize,
     Ok(())
 }
 
-fn filter_average<E: Write>(image_data: &[u8], row_stride: usize, pixel_size: usize, e: &mut E) -> io::Result<()> {
+fn filter_average<E: Write>(image_data: &[u8], row_stride: usize, pixel_bytes: usize, e: &mut E) -> ApngResult<()> {
     let lines: Vec<&[u8]> = image_data.chunks(row_stride).collect();
     let mut buffer = Vec::<u8>::with_capacity(row_stride);
     buffer.resize(row_stride, 0);
 
     e.write_all(&[0x03])?;
-    buffer[..pixel_size].clone_from_slice(&lines[0][..pixel_size]);
-    for (i, it) in buffer.iter_mut().enumerate().take(row_stride).skip(pixel_size) {
-        *it = lines[0][i].wrapping_sub(lines[0][i - pixel_size] / 2);
+    buffer[..pixel_bytes].clone_from_slice(&lines[0][..pixel_bytes]);
+    for (i, it) in buffer.iter_mut().enumerate().take(row_stride).skip(pixel_bytes) {
+        *it = lines[0][i].wrapping_sub(lines[0][i - pixel_bytes] / 2);
     }
     e.write_all(&buffer)?;
 
     for line in lines.windows(2) {
         e.write_all(&[0x03])?;
-        for (i, it) in buffer.iter_mut().enumerate().take(pixel_size) {
+        for (i, it) in buffer.iter_mut().enumerate().take(pixel_bytes) {
             *it = line[1][i].wrapping_sub(line[0][i] / 2);
         }
-        for (i, it) in buffer.iter_mut().enumerate().take(row_stride).skip(pixel_size) {
-            let sum = (i16::from(line[1][i - pixel_size]) + i16::from(line[0][i])) / 2;
+        for (i, it) in buffer.iter_mut().enumerate().take(row_stride).skip(pixel_bytes) {
+            let sum = (i16::from(line[1][i - pixel_bytes]) + i16::from(line[0][i])) / 2;
             *it = line[1][i].wrapping_sub(sum as u8);
         }
         e.write_all(&buffer)?;
@@ -312,7 +332,7 @@ fn filter_average<E: Write>(image_data: &[u8], row_stride: usize, pixel_size: us
     Ok(())
 }
 
-fn filter_paeth<E: Write>(image_data: &[u8], row_stride: usize, pixel_size: usize, e: &mut E) -> io::Result<()> {
+fn filter_paeth<E: Write>(image_data: &[u8], row_stride: usize, pixel_bytes: usize, e: &mut E) -> ApngResult<()> {
     fn paeth(left: u8, up_left: u8, up: u8) -> u8 {
         let w_left = i16::from(left);
         let w_up = i16::from(up);
@@ -339,19 +359,19 @@ fn filter_paeth<E: Write>(image_data: &[u8], row_stride: usize, pixel_size: usiz
     buffer.resize(row_stride, 0);
 
     e.write_all(&[0x04])?;
-    buffer[..pixel_size].clone_from_slice(&lines[0][..pixel_size]);
-    for (i, it) in buffer.iter_mut().enumerate().take(row_stride).skip(pixel_size) {
-        *it = lines[0][i].wrapping_sub(paeth(lines[0][i - pixel_size], 0, 0));
+    buffer[..pixel_bytes].clone_from_slice(&lines[0][..pixel_bytes]);
+    for (i, it) in buffer.iter_mut().enumerate().take(row_stride).skip(pixel_bytes) {
+        *it = lines[0][i].wrapping_sub(paeth(lines[0][i - pixel_bytes], 0, 0));
     }
     e.write_all(&buffer)?;
 
     for line in lines.windows(2) {
         e.write_all(&[0x04])?;
-        for (i, it) in buffer.iter_mut().enumerate().take(pixel_size) {
+        for (i, it) in buffer.iter_mut().enumerate().take(pixel_bytes) {
             *it = line[1][i].wrapping_sub(paeth(0, 0, line[0][i]));
         }
-        for (i, it) in buffer.iter_mut().enumerate().take(row_stride).skip(pixel_size) {
-            *it = line[1][i].wrapping_sub(paeth(line[1][i - pixel_size], line[0][i - pixel_size], line[0][i]));
+        for (i, it) in buffer.iter_mut().enumerate().take(row_stride).skip(pixel_bytes) {
+            *it = line[1][i].wrapping_sub(paeth(line[1][i - pixel_bytes], line[0][i - pixel_bytes], line[0][i]));
         }
         e.write_all(&buffer)?;
     }
@@ -359,13 +379,13 @@ fn filter_paeth<E: Write>(image_data: &[u8], row_stride: usize, pixel_size: usiz
     Ok(())
 }
 
-fn get_compressed_size(filter: Filter, image_data: &[u8], row_stride: usize, pixel_size: usize) -> io::Result<usize> {
+fn get_compressed_size(filter: Filter, image_data: &[u8], row_stride: usize, pixel_bytes: usize) -> ApngResult<usize> {
     let mut out = vec![];
-    filter.apply(image_data, row_stride, pixel_size, &mut out)?;
+    filter.apply(image_data, row_stride, pixel_bytes, &mut out)?;
     Ok(out.len())
 }
 
-fn infer_best_filter(image_data: &[u8], row_stride: usize, pixel_size: usize) -> io::Result<Filter> {
+fn infer_best_filter(image_data: &[u8], row_stride: usize, pixel_bytes: usize) -> ApngResult<Filter> {
     let mut tiny_image_data = vec![];
     let len = image_data.len();
     let lines = len / row_stride;
@@ -386,9 +406,22 @@ fn infer_best_filter(image_data: &[u8], row_stride: usize, pixel_size: usize) ->
 
     let mut results = vec![];
     for filter in Filter::into_enum_iter() {
-        let size = get_compressed_size(filter, &tiny_image_data, row_stride, pixel_size)?;
+        let size = get_compressed_size(filter, &tiny_image_data, row_stride, pixel_bytes)?;
         results.push((filter, size));
     }
 
     Ok(results.iter().max_by_key(|it| it.1).unwrap().0)
+}
+
+
+fn validate_color(color: &Color) -> ApngResult<()> {
+    use self::Color::*;
+
+    match color {
+        Grayscale(b) if [1, 2, 4, 8, 16].contains(&b) => (),
+        GrayscaleA(b) | RGB(b) | RGBA(b) if [8, 16].contains(b) => (),
+        _ => return Err(ErrorKind::InvalidColor)?,
+    };
+
+    Ok(())
 }

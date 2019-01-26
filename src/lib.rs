@@ -31,11 +31,7 @@ mod tests {
         let meta = Meta {
             width: width as u32,
             height: height as u32,
-            color: Color {
-                alpha_channel: false,
-                bit_depth: 8,
-                grayscale: false,
-            },
+            color: Color::RGB(8),
             frames: 0,
             plays: None, // Infinite loop
         };
