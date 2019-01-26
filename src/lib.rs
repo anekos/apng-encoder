@@ -16,6 +16,7 @@ mod tests {
 
     use image::ImageDecoder;
     use image::png::PNGDecoder;
+    use rand::prelude::*;
 
     use crate::apng::encoder::{Encoder, Filter};
     use crate::apng::{Color, Delay, Frame, Meta};
@@ -107,6 +108,65 @@ mod tests {
     #[test]
     fn test_generate_png_with_inferred_filter() {
         test_generate_png("cherenkov-infer.png", None);
+    }
+
+    #[test]
+    fn test_generate_shida() {
+        const WIDTH: usize = 200;
+        const HEIGHT: usize = 200;
+        const PX: usize = 2;
+
+        fn w1x(x: f64, y: f64) -> f64 { x * 0.836 + 0.044 * y }
+        fn w1y(x: f64, y: f64) -> f64 { x * -0.044 + 0.836 * y + 0.169 }
+        fn w2x(x: f64, y: f64) -> f64 { x * -0.141 + 0.302 * y }
+        fn w2y(x: f64, y: f64) -> f64 { x * 0.302 + 0.141 * y + 0.127 }
+        fn w3x(x: f64, y: f64) -> f64 { x * 0.141 + -0.302 * y }
+        fn w3y(x: f64, y: f64) -> f64 { x * 0.302 + 0.141 * y + 0.169 }
+        fn w4x(_: f64, _: f64) -> f64 { 0.0 }
+        fn w4y(_: f64, y: f64) -> f64 { 0.175337 * y }
+
+        fn f(rng: &mut ThreadRng, buffer: &mut [u8], k: i64, x: f64, y: f64) {
+            if 0 <= k {
+                f(rng, buffer, k - 1,  w1x(x, y), w1y(x, y));
+                if rng.gen::<f64>() <= 0.3 {
+                    f(rng, buffer, k - 1, w2x(x, y), w2y(x, y));
+                }
+                if rng.gen::<f64>() <= 0.3 {
+                    f(rng, buffer, k - 1, w3x(x, y), w3y(x, y));
+                }
+                if rng.gen::<f64>() <= 0.3 {
+                    f(rng, buffer, k - 1, w4x(x, y), w4y(x, y));
+                }
+            } else {
+                let xi = (x + 0.5) * 0.98 * WIDTH as f64;
+                let yi = (1.0 - y * 0.98) * HEIGHT as f64;
+                let (xi, yi) = (xi.floor() as usize, yi.floor() as usize);
+                let base = yi * WIDTH * PX + xi * PX;
+                for i in 0 .. PX {
+                    buffer[base + i] = 0xff;
+                }
+            }
+        }
+
+        let mut rng = rand::thread_rng();
+
+        let mut file = File::create("test-output/shida.png").unwrap();
+        let meta = Meta {
+            width: WIDTH as u32,
+            height: HEIGHT as u32,
+            color: Color::Grayscale(16),
+            frames: 3,
+            plays: None, // Infinite loop
+        };
+        let frame = Frame { delay: Some(Delay::new(1, 1)), ..Default::default() };
+        let mut encoder = Encoder::create(&mut file, &meta).unwrap();
+        for i in 0 .. meta.frames {
+            let mut buffer = vec![];
+            buffer.resize(WIDTH * HEIGHT * PX, 0);
+            f(&mut rng, buffer.as_mut_slice(), 10 + i as i64 * 5, 0.0, 0.0);
+            encoder.write_frame(&buffer, None, Some(&frame), None).unwrap();
+        }
+        encoder.finish().unwrap();
     }
 
     #[bench]#[cfg(feature = "benchmark")]

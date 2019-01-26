@@ -16,6 +16,7 @@ flate2 = "*"
 
 [dev-dependencies]
 image = "*"
+rand = "*"
 
 [dev-dependencies.cargo-husky]
 version = "1"
