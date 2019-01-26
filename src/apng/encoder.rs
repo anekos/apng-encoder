@@ -552,6 +552,13 @@ mod tests {
         encoder.finish().unwrap();
     }
 
+    #[test]#[should_panic(expected="Invalid color")]
+    fn test_color_validation() {
+        let mut buffer = vec![];
+        let meta = Meta { width: 2, height: 2, color: Color::RGB(17), frames: 2, plays: None };
+        let _ = Encoder::create(&mut buffer, meta).unwrap();
+    }
+
     #[test]
     fn test_generate_png_without_filter() {
         test_generate_png("cherenkov-none.png", Some(Filter::None));
