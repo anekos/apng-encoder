@@ -11,12 +11,18 @@ pub type ApngResult<T> = Result<T, Error>;
 
 #[derive(Fail, Debug)]
 pub enum ErrorKind {
-    #[fail(display = "IO error")]
-    Io,
     #[fail(display = "Invalid color")]
     InvalidColor,
+    #[fail(display = "IO error")]
+    Io,
+    #[fail(display = "Not enough frames")]
+    NotEnoughFrames,
     #[fail(display = "Too large image")]
     TooLargeImage,
+    #[fail(display = "Too many frames")]
+    TooManyFrames,
+    #[fail(display = "Too small image")]
+    TooSmallImage,
 }
 
 #[derive(Debug)]
