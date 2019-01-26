@@ -48,8 +48,8 @@ use super::errors::{ApngResult, ErrorKind};
 ///  // (x=0,y=1)            (x=1,y=1)
 ///     0x00, 0x00, 0x00,    0x00, 0x00, 0xFF,
 ///     ],
-///     None,
 ///     Some(&frame),
+///     None,
 ///     None).unwrap();
 /// // BLACK RED
 /// // BLUE  GREEN
@@ -58,8 +58,8 @@ use super::errors::{ApngResult, ErrorKind};
 ///     0x00, 0x00, 0x00,   0xFF, 0x00, 0x00,
 ///     0x00, 0x00, 0xFF,   0x00, 0xFF, 0x00,
 ///     ],
-///     None,
 ///     Some(&frame),
+///     None,
 ///     None).unwrap();
 /// // BLUE  BLACK
 /// // GREEN RED
@@ -68,8 +68,8 @@ use super::errors::{ApngResult, ErrorKind};
 ///     0x00, 0x00, 0xFF,   0x00, 0x00, 0x00,
 ///     0x00, 0xFF, 0x00,   0xFF, 0x00, 0x00,
 ///     ],
-///     None,
 ///     Some(&frame),
+///     None,
 ///     None).unwrap();
 /// // GREEN BLUE
 /// // RED   BLACK
@@ -78,8 +78,8 @@ use super::errors::{ApngResult, ErrorKind};
 ///     0x00, 0xFF, 0x00,   0x00, 0x00, 0xFF,
 ///     0xFF, 0x00, 0x00,   0x00, 0x00, 0x00,
 ///     ],
-///     None,
 ///     Some(&frame),
+///     None,
 ///     None).unwrap();
 /// // !!IMPORTANT DONT FORGET!!
 /// encoder.finish().unwrap();
@@ -126,7 +126,7 @@ impl<'a, F: io::Write> Encoder<'a, F> {
         self.write_chunk(*b"IEND", &zero)
     }
 
-    pub fn write_frame(&mut self, image_data: &[u8], row_stride: Option<usize>, frame: Option<&Frame>, filter: Option<Filter>) -> ApngResult<()> {
+    pub fn write_frame(&mut self, image_data: &[u8], frame: Option<&Frame>, filter: Option<Filter>, row_stride: Option<usize>) -> ApngResult<()> {
         if self.sequence == 0 {
             self.write_default_image(image_data, row_stride, frame, filter)
         } else {

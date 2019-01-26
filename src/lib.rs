@@ -58,7 +58,7 @@ mod tests {
         let frame = Frame { delay: Some(Delay::new(1, 10)), ..Default::default() };
         let mut encoder = Encoder::create(file, &meta).unwrap();
         for source in sources {
-            encoder.write_frame(&source, None, Some(&frame), filter).unwrap();
+            encoder.write_frame(&source, Some(&frame), filter, None).unwrap();
         }
         encoder.finish().unwrap();
     }
@@ -164,7 +164,7 @@ mod tests {
             let mut buffer = vec![];
             buffer.resize(WIDTH * HEIGHT * PX, 0);
             f(&mut rng, buffer.as_mut_slice(), 10 + i as i64 * 5, 0.0, 0.0);
-            encoder.write_frame(&buffer, None, Some(&frame), None).unwrap();
+            encoder.write_frame(&buffer, Some(&frame), None, None).unwrap();
         }
         encoder.finish().unwrap();
     }
