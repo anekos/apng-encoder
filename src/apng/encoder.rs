@@ -8,9 +8,8 @@ use flate2::Compression;
 use flate2::Crc;
 use flate2::write::ZlibEncoder;
 
-use super::{Frame, Meta};
-use super::errors::ApngResult;
-use super::validators;
+use super::{Color, Frame, Meta};
+use super::errors::{ApngResult, ErrorKind};
 
 
 /// APNG Encoder
@@ -108,8 +107,7 @@ pub enum Filter {
 
 impl<'a, F: io::Write> Encoder<'a, F> {
     pub fn create(writer: &'a mut F, meta: &Meta) -> ApngResult<Self> {
-        validators::validate_color(&meta.color)?;
-
+        validate_color(&meta.color)?;
         let mut instance = Encoder {
             height: meta.height,
             pixel_bytes: meta.color.pixel_bytes(),
@@ -143,12 +141,24 @@ impl<'a, F: io::Write> Encoder<'a, F> {
     }
 
     fn make_image_data(&mut self, image_data: &[u8], row_stride: Option<usize>, buffer: &mut Vec<u8>, width: u32, filter: Option<Filter>) -> ApngResult<()> {
-        let row_stride = row_stride.unwrap_or_else(|| width as usize * self.pixel_bytes);
+        let row_stride = self.compute_row_stride(&image_data, row_stride, width)?;
         let mut e = ZlibEncoder::new(buffer, Compression::best());
         let filter = filter.map(Ok).unwrap_or_else(|| infer_best_filter(image_data, row_stride, self.pixel_bytes))?;
         filter.apply(image_data, row_stride, self.pixel_bytes, &mut e)?;
         e.finish()?;
         Ok(())
+    }
+
+    fn compute_row_stride(&self, image_data: &[u8], row_stride: Option<usize>, width: u32) -> ApngResult<usize> {
+        if self.width < width {
+            return Err(ErrorKind::TooLargeImage)?;
+        }
+        let row_stride = row_stride.unwrap_or_else(|| width as usize * self.pixel_bytes);
+        let height = image_data.len() / row_stride;
+        if self.height < height as u32 {
+            return Err(ErrorKind::TooLargeImage)?;
+        }
+        Ok(row_stride)
     }
 
     fn write_animation_frame(&mut self, image_data: &[u8], row_stride: Option<usize>, frame: Option<&Frame>, filter: Option<Filter>) -> ApngResult<()> {
@@ -401,4 +411,17 @@ fn infer_best_filter(image_data: &[u8], row_stride: usize, pixel_bytes: usize) -
     }
 
     Ok(results.iter().max_by_key(|it| it.1).unwrap().0)
+}
+
+
+fn validate_color(color: &Color) -> ApngResult<()> {
+    use self::Color::*;
+
+    match color {
+        Grayscale(b) if [1, 2, 4, 8, 16].contains(&b) => (),
+        GrayscaleA(b) | RGB(b) | RGBA(b) if [8, 16].contains(b) => (),
+        _ => return Err(ErrorKind::InvalidColor)?,
+    };
+
+    Ok(())
 }

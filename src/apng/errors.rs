@@ -15,6 +15,8 @@ pub enum ErrorKind {
     Io,
     #[fail(display = "Invalid color")]
     InvalidColor,
+    #[fail(display = "Too large image")]
+    TooLargeImage,
 }
 
 #[derive(Debug)]

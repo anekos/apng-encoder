@@ -5,7 +5,6 @@ use std::default::Default;
 
 pub mod encoder;
 pub mod errors;
-pub mod validators;
 
 
 
