@@ -13,8 +13,8 @@ pub type ApngResult<T> = Result<T, Error>;
 pub enum ErrorKind {
     #[fail(display = "IO error")]
     Io,
-    #[fail(display = "Invalid parameter error")]
-    InvalidParameter,
+    #[fail(display = "Invalid color")]
+    InvalidColor,
 }
 
 #[derive(Debug)]

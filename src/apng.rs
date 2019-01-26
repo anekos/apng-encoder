@@ -5,6 +5,7 @@ use std::default::Default;
 
 pub mod encoder;
 pub mod errors;
+pub mod validators;
 
 
 
@@ -18,12 +19,12 @@ pub struct Meta {
     pub width: u32,
 }
 
-#[derive(Default)]
-pub struct Color {
-    // TODO pub palette: bool,
-    pub bit_depth: u8,
-    pub grayscale: bool,
-    pub alpha_channel: bool,
+pub enum Color {
+    Grayscale(u8),
+    GrayscaleA(u8),
+    // Palette,
+    RGB(u8),
+    RGBA(u8),
 }
 
 #[derive(Default)]
@@ -58,25 +59,27 @@ pub enum BlendOperator {
 
 
 impl Color {
-    pub fn to_u8(&self) -> u8 {
-        let mut result = 0;
-        // if self.palette {
-        //     result = 0b001;
-        // }
-        if !self.grayscale {
-            result |= 0b010;
+    pub fn bit_depth(&self) -> u8 {
+        use self::Color::*;
+
+        match *self {
+            Grayscale(b) | GrayscaleA(b) | RGB(b) | RGBA(b) => b,
         }
-        if self.alpha_channel {
-            result |= 0b100;
-        }
-        result
     }
 
-    pub fn pixel_size(&self) -> usize {
-        let single = if self.bit_depth <= 8 { 1 } else { 2 };
-        let alpha_channel = if self.alpha_channel { 1 } else { 0 };
-        let base = if self.grayscale { 1 } else { 3 };
-        single * (base + alpha_channel)
+    pub fn pixel_bytes(&self) -> usize {
+        use self::Color::*;
+
+        match *self {
+            Grayscale(16) => 2,
+            Grayscale(_) => 1,
+            GrayscaleA(16) => 4,
+            GrayscaleA(_) => 2,
+            RGB(16) => 6,
+            RGB(_) => 3,
+            RGBA(16) => 8,
+            RGBA(_) => 4,
+        }
     }
 }
 
