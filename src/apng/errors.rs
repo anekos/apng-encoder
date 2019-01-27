@@ -3,6 +3,7 @@ use failure::{Backtrace, Context, Fail};
 use std::fmt::Display;
 use std::fmt;
 use std::io::Error as IOError;
+use std::num::ParseIntError;
 
 
 pub type ApngResult<T> = Result<T, Error>;
@@ -11,12 +12,16 @@ pub type ApngResult<T> = Result<T, Error>;
 
 #[derive(Fail, Debug)]
 pub enum ErrorKind {
+    #[fail(display = "Invalid argument")]
+    InvalidArgument,
     #[fail(display = "Invalid color")]
     InvalidColor,
     #[fail(display = "IO error")]
     Io,
     #[fail(display = "Not enough frames")]
     NotEnoughFrames,
+    #[fail(display = "Not enough argument")]
+    NotEnoughArgument,
     #[fail(display = "Too large image")]
     TooLargeImage,
     #[fail(display = "Too many frames")]
@@ -75,6 +80,14 @@ impl From<IOError> for Error {
     fn from(error: IOError) -> Error {
         Error {
             inner: error.context(ErrorKind::Io),
+        }
+    }
+}
+
+impl From<ParseIntError> for Error {
+    fn from(error: ParseIntError) -> Error {
+        Error {
+            inner: error.context(ErrorKind::InvalidArgument),
         }
     }
 }
