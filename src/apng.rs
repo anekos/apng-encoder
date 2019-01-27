@@ -8,6 +8,7 @@ pub mod errors;
 
 
 
+#[derive(Debug)]
 pub struct Meta {
     pub color: Color,
     /// Number of animation frames
@@ -18,6 +19,7 @@ pub struct Meta {
     pub width: u32,
 }
 
+#[derive(Debug)]
 pub enum Color {
     Grayscale(u8),
     GrayscaleA(u8),
@@ -26,7 +28,7 @@ pub enum Color {
     RGBA(u8),
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Frame {
     pub width: Option<u32>,
     pub height: Option<u32>,
@@ -37,20 +39,20 @@ pub struct Frame {
     pub blend_operator: Option<BlendOperator>,
 }
 
-#[derive(Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct Delay {
     pub numerator: u16,
     pub denominator: u16,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub enum DisposeOperator {
     None = 0,
     Background = 1,
     Previous = 2,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub enum BlendOperator {
     Source = 0,
     Over = 1,
