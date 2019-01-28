@@ -531,7 +531,7 @@ mod tests {
         let (meta, sources) = load_sources();
         b.iter(|| {
             let mut file = vec![];
-            generate_png(&mut file, &sources, &meta, Some(filter));
+            generate_png(&mut file, &sources, meta.clone(), Some(filter));
         });
     }
 

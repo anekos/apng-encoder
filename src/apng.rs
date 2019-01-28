@@ -8,7 +8,7 @@ pub mod errors;
 
 
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Meta {
     pub color: Color,
     /// Number of animation frames
@@ -28,7 +28,7 @@ pub enum Color {
     RGBA(u8),
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Frame {
     pub width: Option<u32>,
     pub height: Option<u32>,
