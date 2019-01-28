@@ -67,7 +67,7 @@ fn main() {
 
 fn print_usage() {
     eprintln!("Usage:");
-    eprintln!("  apngc {{[--delay <DELAY>] <IMAGE_FILE>}}...");
+    eprintln!("  apngc {{[--delay <DELAY>] [-x <X>] [-y <Y>] [--width <WIDTH>] [--height <HEIGHT>] <IMAGE_FILE>}}...");
     eprintln!("Delay format:");
     eprintln!("  `1/2` for 0.5 seconds");
     eprintln!("  `3/1` for 3 seconds");
@@ -132,6 +132,14 @@ fn parse_args() -> AppResult<Setting> {
                 parameter.delay = Some(parse_delay(&next()?)?),
             "-p" | "--plays" =>
                 setting.plays = next()?.parse()?,
+            "-x" =>
+                parameter.rect.x = Some(next()?.parse()?),
+            "-y" =>
+                parameter.rect.y = Some(next()?.parse()?),
+            "-h" | "--height" =>
+                parameter.rect.height = Some(next()?.parse()?),
+            "-w" | "--width" =>
+                parameter.rect.width = Some(next()?.parse()?),
             filepath => {
                 let entry = Entry {
                     filepath: filepath.to_owned(),
