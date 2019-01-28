@@ -67,7 +67,7 @@ fn main() {
 
 fn print_usage() {
     eprintln!("Usage:");
-    eprintln!("  apngc {{[--delay <DELAY>] [-x <X>] [-y <Y>] [--width <WIDTH>] [--height <HEIGHT>] <IMAGE_FILE>}}...");
+    eprintln!("  apngc {{[--delay|-d <DELAY>] [-x <X>] [-y <Y>] [--width|-w <WIDTH>] [--height|-h <HEIGHT>] <IMAGE_FILE>}}...");
     eprintln!("Delay format:");
     eprintln!("  `1/2` for 0.5 seconds");
     eprintln!("  `3/1` for 3 seconds");
