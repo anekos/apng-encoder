@@ -103,6 +103,14 @@ pub enum Filter {
     Paeth = 4,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct Rectangle {
+    height: u32,
+    width: u32,
+    x: u32,
+    y: u32,
+}
+
 
 impl<'a, F: io::Write> Encoder<'a, F> {
     pub fn create(writer: &'a mut F, meta: Meta) -> ApngResult<Self> {
@@ -145,8 +153,8 @@ impl<'a, F: io::Write> Encoder<'a, F> {
         result
     }
 
-    fn make_image_data(&mut self, image_data: &[u8], row_stride: Option<usize>, buffer: &mut Vec<u8>, width: u32, filter: Option<Filter>) -> ApngResult<()> {
-        let row_stride = self.compute_row_stride(&image_data, row_stride, width)?;
+    fn make_image_data(&mut self, image_data: &[u8], row_stride: Option<usize>, buffer: &mut Vec<u8>, rect: Rectangle, filter: Option<Filter>) -> ApngResult<()> {
+        let row_stride = self.compute_row_stride(&image_data, row_stride, rect)?;
         let mut e = ZlibEncoder::new(buffer, Compression::best());
         let pixel_bytes = self.meta.color.pixel_bytes();
         let filter = filter.map(Ok).unwrap_or_else(|| infer_best_filter(image_data, row_stride, pixel_bytes))?;
@@ -155,25 +163,23 @@ impl<'a, F: io::Write> Encoder<'a, F> {
         Ok(())
     }
 
-    fn compute_row_stride(&self, image_data: &[u8], row_stride: Option<usize>, width: u32) -> ApngResult<usize> {
-        if self.meta.width < width {
+    fn compute_row_stride(&self, image_data: &[u8], row_stride: Option<usize>, rect: Rectangle) -> ApngResult<usize> {
+        let row_stride = row_stride.unwrap_or_else(|| rect.width as usize * self.meta.color.pixel_bytes());
+        let data_height = (image_data.len() / row_stride) as u32;
+        if self.meta.width < rect.right() || self.meta.height < rect.bottom() || rect.bottom() < data_height{
             return Err(ErrorKind::TooLargeImage)?;
         }
-        let row_stride = row_stride.unwrap_or_else(|| width as usize * self.meta.color.pixel_bytes());
-        let height = image_data.len() / row_stride;
-        if self.meta.height < height as u32 {
-            return Err(ErrorKind::TooLargeImage)?;
-        } else if (height as u32) < self.meta.height {
+        if data_height < rect.height {
             return Err(ErrorKind::TooSmallImage)?;
         }
         Ok(row_stride)
     }
 
     fn write_animation_frame(&mut self, image_data: &[u8], row_stride: Option<usize>, frame: Option<&Frame>, filter: Option<Filter>) -> ApngResult<()> {
-        let width = self.write_frame_control(frame)?;
+        let size = self.write_frame_control(frame)?;
         let mut buffer = vec![];
         buffer.write_u32::<BigEndian>(self.next_sequence())?;
-        self.make_image_data(image_data, row_stride, &mut buffer, width, filter)?;
+        self.make_image_data(image_data, row_stride, &mut buffer, size, filter)?;
         self.write_chunk(*b"fdAT", &buffer)?;
         Ok(())
     }
@@ -201,18 +207,19 @@ impl<'a, F: io::Write> Encoder<'a, F> {
     }
 
     fn write_default_image(&mut self, image_data: &[u8], row_stride: Option<usize>, frame: Option<&Frame>, filter: Option<Filter>) -> ApngResult<()> {
-        let width = self.write_frame_control(frame)?;
+        let size = self.write_frame_control(frame)?;
         let mut buffer = vec![];
-        self.make_image_data(image_data, row_stride, &mut buffer, width, filter)?;
+        self.make_image_data(image_data, row_stride, &mut buffer, size, filter)?;
         self.write_chunk(*b"IDAT", &buffer)?;
         Ok(())
     }
 
-    fn write_frame_control(&mut self, frame: Option<&Frame>) -> ApngResult<u32> {
+    fn write_frame_control(&mut self, frame: Option<&Frame>) -> ApngResult<Rectangle> {
         let width = frame.and_then(|it| it.width).unwrap_or(self.meta.width);
         let height = frame.and_then(|it| it.height).unwrap_or(self.meta.height);
         let x = frame.and_then(|it| it.x).unwrap_or(0);
         let y = frame.and_then(|it| it.y).unwrap_or(0);
+        let rect = Rectangle { width, height, x, y };
         let delay = frame.and_then(|it| it.delay).unwrap_or_default();
         let dispose = frame.and_then(|it| it.dispose_operator).unwrap_or_default() as u8;
         let blend = frame.and_then(|it| it.blend_operator).unwrap_or_default() as u8;
@@ -228,7 +235,7 @@ impl<'a, F: io::Write> Encoder<'a, F> {
         buffer.write_all(&[dispose, blend])?;
         self.write_chunk(*b"fcTL", &buffer)?;
 
-        Ok(width)
+        Ok(rect)
     }
 
     fn write_image_header(&mut self) -> ApngResult<()> {
@@ -266,6 +273,17 @@ impl Filter {
             Filter::Up => filter_up,
         };
         f(image_data, row_stride, pixel_bytes, e)
+    }
+}
+
+
+impl Rectangle {
+    fn right(&self) -> u32 {
+        self.x + self.width
+    }
+
+    fn bottom(&self) -> u32 {
+        self.y + self.height
     }
 }
 
@@ -497,11 +515,14 @@ mod tests {
         encoder.finish().unwrap();
     }
 
+    fn create_file(filename: &str) -> File {
+        let _ = create_dir("test-output");
+        File::create(format!("test-output/{}", filename)).unwrap()
+    }
+
     fn test_generate_png(filename: &str, filter: Option<Filter>) {
         let (meta, sources) = load_sources();
-        let _ = create_dir("test-output");
-        let mut file = File::create(format!("test-output/{}", filename)).unwrap();
-        generate_png(&mut file, &sources, meta, filter)
+        generate_png(&mut create_file(filename), &sources, meta, filter)
 
     }
 
@@ -552,6 +573,26 @@ mod tests {
         encoder.finish().unwrap();
     }
 
+    #[test]#[should_panic(expected="Too large image")]
+    fn test_too_large_validation_with_offset_x() {
+        let mut buffer = vec![];
+        let meta = Meta { width: 2, height: 2, color: Color::RGB(8), frames: 1, plays: None };
+        let mut encoder = Encoder::create(&mut buffer, meta).unwrap();
+        let frame = Frame { x: Some(1), ..Default::default() };
+        encoder.write_frame(&FOUR, Some(&frame), None, None).unwrap();
+        encoder.finish().unwrap();
+    }
+
+    #[test]#[should_panic(expected="Too large image")]
+    fn test_too_large_validation_with_offset_y() {
+        let mut buffer = vec![];
+        let meta = Meta { width: 2, height: 2, color: Color::RGB(8), frames: 1, plays: None };
+        let mut encoder = Encoder::create(&mut buffer, meta).unwrap();
+        let frame = Frame { y: Some(1), ..Default::default() };
+        encoder.write_frame(&FOUR, Some(&frame), None, None).unwrap();
+        encoder.finish().unwrap();
+    }
+
     #[test]#[should_panic(expected="Invalid color")]
     fn test_color_validation() {
         let mut buffer = vec![];
@@ -587,6 +628,45 @@ mod tests {
     #[test]
     fn test_generate_png_with_inferred_filter() {
         test_generate_png("cherenkov-infer.png", None);
+    }
+
+    #[test]
+    fn test_generate_offset() {
+        const WIDTH: u32 = 200;
+        const HEIGHT: u32 = 100;
+
+        let mut file = create_file("offset.png");
+
+        let frames = 5;
+        let meta = Meta {
+            width: WIDTH,
+            height: HEIGHT,
+            color: Color::Grayscale(8),
+            frames,
+            plays: None, // Infinite loop
+        };
+        let mut encoder = Encoder::create(&mut file, meta).unwrap();
+
+        let mut buffer = vec![];
+        buffer.resize((WIDTH * HEIGHT) as usize, 0);
+        let frame = Frame { delay: Some(Delay::new(1, 1)), ..Default::default() };
+        encoder.write_frame(&buffer, Some(&frame), None, None).unwrap();
+
+        for i in 1 .. frames {
+            let (width, height) = (WIDTH / (frames - 1) * i, HEIGHT / (frames - 1) * i);
+            let mut buffer = vec![];
+            buffer.resize((height * width) as usize, 0xff);
+            let frame = Frame {
+                height: Some(height),
+                width: Some(width),
+                x: Some((WIDTH - width) / 2),
+                y: Some((HEIGHT - height) / 2),
+                delay: Some(Delay::new(1, 1)),
+                ..Default::default()
+            };
+            encoder.write_frame(&buffer, Some(&frame), None, None).unwrap();
+        }
+        encoder.finish().unwrap();
     }
 
     #[test]
@@ -629,7 +709,7 @@ mod tests {
 
         let mut rng = rand::thread_rng();
 
-        let mut file = File::create("test-output/shida.png").unwrap();
+        let mut file = create_file("shida.png");
         let frames = 3;
         let meta = Meta {
             width: WIDTH as u32,
