@@ -1,5 +1,5 @@
 
-# Tiny APNG Encoder for Rust
+# APNG Encoder for Rust
 
 ![Animated Cat](https://gyazo.snca.net/2019/01/17-193109-e35952c2667267664475a8f08e8ab35d.png)
 

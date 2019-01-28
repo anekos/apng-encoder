@@ -6,6 +6,7 @@ edition = "2018"
 description = "APNG (Animated PNG) Encoder"
 repository = "http://github.com/anekos/apng-encoder"
 license-file = "LICENSE"
+readme = "README.md"
 
 [features]
 benchmark = []
