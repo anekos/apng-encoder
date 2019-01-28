@@ -19,6 +19,8 @@ pub enum ErrorKind {
     Apng,
     #[fail(display = "Image error")]
     Image,
+    #[fail(display = "Intermingling color type")]
+    InterminglingColorType,
     #[fail(display = "Invalid option value")]
     InvalidOptionValue,
     #[fail(display = "IO error")]

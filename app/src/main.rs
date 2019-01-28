@@ -1,12 +1,11 @@
 
 use std::env;
 use std::fs::File;
-use std::io::{stdout, BufWriter};
+use std::io::{stdout, BufWriter, Read};
 use std::process::exit;
 
 use failure::Fail;
-use image::ImageDecoder;
-use image::png::PNGDecoder;
+use image::GenericImageView;
 
 use apng_encoder::apng::{Color, Delay, Frame, Meta};
 use apng_encoder::apng::errors::{ApngResult};
@@ -21,6 +20,7 @@ use crate::errors::{AppResult, ErrorKind};
 #[derive(Debug, Default, Clone)]
 struct EntryParameter {
     delay: Option<Delay>,
+    rect: Rectangle,
 }
 
 #[derive(Debug, Clone)]
@@ -35,53 +35,68 @@ struct Setting {
     entries: Vec<Entry>,
 }
 
+struct Image {
+    color: Color,
+    data: Vec<u8>,
+    height: u32,
+    width: u32,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct Rectangle {
+    x: Option<u32>,
+    y: Option<u32>,
+    height: Option<u32>,
+    width: Option<u32>,
+}
+
 
 fn main() {
     if let Err(err) = app() {
         let mut fail: &Fail = &err;
         let mut message = err.to_string();
-
         while let Some(cause) = fail.cause() {
             message.push_str(&format!("\n\tcaused by: {}", cause));
             fail = cause;
         }
-
         eprintln!("Error: {}", message);
-
         exit(1);
     }
 }
 
 fn app() -> AppResult<()> {
-    let mut setting = parse_args()?;
+    let setting = parse_args()?;
 
     let out = stdout();
     let mut out = BufWriter::new(out.lock());
 
     let mut encoder;
+    let first_color;
 
-    if let Some(first) = setting.entries.pop() {
-        let file = File::open(&first.filepath)?;
-        let decoder = PNGDecoder::new(file)?;
-        let (width, height) = decoder.dimensions();
+    if let Some(first) = setting.entries.first() {
+        let image = load_image(&first.filepath)?;
         let meta = Meta {
-            width: width as u32,
-            height: height as u32,
-            color: from_color_type(&decoder.colortype())?,
-            frames: setting.entries.len() as u32 + 1,
+            width: image.width,
+            height: image.height,
+            color: image.color,
+            frames: setting.entries.len() as u32,
             plays: Some(setting.plays),
         };
+        first_color = image.color;
         encoder = Encoder::create(&mut out, meta)?;
-        let image_data: Vec<u8> = decoder.read_image()?;
-        encoder.write_frame(&image_data, Some(&first.parameter.to_frame()), None, None)?;
+        let frame = make_frame(&first.parameter, image.width, image.height);
+        encoder.write_frame(&image.data, Some(&frame), None, None)?;
     } else {
         return Err(ErrorKind::NotEnoughArgument)?;
     }
 
-    for entry in setting.entries {
-        let file = File::open(&entry.filepath)?;
-        let decoder = PNGDecoder::new(file)?;
-        encoder.write_frame(&decoder.read_image()?, Some(&entry.parameter.to_frame()), None, None)?;
+    for entry in setting.entries.iter().skip(1) {
+        let image = load_image(&entry.filepath)?;
+        if first_color != image.color {
+            return Err(ErrorKind::InterminglingColorType)?;
+        }
+        let frame = make_frame(&entry.parameter, image.width, image.height);
+        encoder.write_frame(&image.data, Some(&frame), None, None)?;
     }
 
     encoder.finish()?;
@@ -146,11 +161,22 @@ fn from_color_type(color_type: &image::ColorType) -> AppResult<Color> {
 }
 
 
-impl EntryParameter {
-    fn to_frame(&self) -> Frame {
-        Frame {
-            delay: self.delay,
-            ..Default::default()
-        }
+fn load_image(filepath: &str) -> AppResult<Image> {
+    let mut file = File::open(&filepath)?;
+    let mut buffer = vec![];
+    file.read_to_end(&mut buffer)?;
+    let image = image::load_from_memory(&buffer)?;
+    let (width, height) = image.dimensions();
+    let color = from_color_type(&image.color())?;
+    Ok(Image { width, color, data: image.raw_pixels(), height})
+}
+
+
+fn make_frame(param: &EntryParameter, width: u32, height: u32) -> Frame {
+    Frame {
+        delay: param.delay,
+        width: Some(param.rect.width.unwrap_or(width)),
+        height: Some(param.rect.width.unwrap_or(height)),
+        ..Default::default()
     }
 }
