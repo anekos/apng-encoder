@@ -535,7 +535,7 @@ mod tests {
     #[test]#[should_panic(expected="Too large image")]
     fn test_too_large_validation() {
         let mut buffer = vec![];
-        let meta = Meta { width: 2, height: 2, color: Color::RGB(8), frames: 2, plays: None };
+        let meta = Meta { width: 2, height: 2, color: Color::RGB(8), frames: 1, plays: None };
         let mut encoder = Encoder::create(&mut buffer, meta).unwrap();
         let mut image_data = vec![];
         image_data.resize(1000, 0);
@@ -546,7 +546,7 @@ mod tests {
     #[test]#[should_panic(expected="Too small image")]
     fn test_too_small_validation() {
         let mut buffer = vec![];
-        let meta = Meta { width: 2, height: 2, color: Color::RGB(8), frames: 2, plays: None };
+        let meta = Meta { width: 2, height: 2, color: Color::RGB(8), frames: 1, plays: None };
         let mut encoder = Encoder::create(&mut buffer, meta).unwrap();
         encoder.write_frame(&[0x00], None, None, None).unwrap();
         encoder.finish().unwrap();
