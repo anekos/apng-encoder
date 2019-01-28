@@ -59,9 +59,18 @@ fn main() {
             message.push_str(&format!("\n\tcaused by: {}", cause));
             fail = cause;
         }
-        eprintln!("Error: {}", message);
+        eprintln!("Error: {}\n", message);
+        print_usage();
         exit(1);
     }
+}
+
+fn print_usage() {
+    eprintln!("Usage:");
+    eprintln!("  apngc {{[--delay <DELAY>] <IMAGE_FILE>}}...");
+    eprintln!("Delay format:");
+    eprintln!("  `1/2` for 0.5 seconds");
+    eprintln!("  `3/1` for 3 seconds");
 }
 
 fn app() -> AppResult<()> {
@@ -115,6 +124,10 @@ fn parse_args() -> AppResult<Setting> {
         let mut next = || args.next().ok_or(ErrorKind::NotEnoughArgument);
 
         match &*arg {
+            "--help" => {
+                print_usage();
+                exit(0);
+            },
             "-d" | "--delay" =>
                 parameter.delay = Some(parse_delay(&next()?)?),
             "-p" | "--plays" =>
