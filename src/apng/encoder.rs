@@ -114,7 +114,7 @@ pub struct Rectangle {
 
 impl<'a, F: io::Write> Encoder<'a, F> {
     pub fn create(writer: &'a mut F, meta: Meta) -> ApngResult<Self> {
-        validate_color(&meta.color)?;
+        validate_color(meta.color)?;
         let mut instance = Encoder {
             meta,
             sequence: 0,
@@ -440,12 +440,12 @@ fn infer_best_filter(image_data: &[u8], row_stride: usize, pixel_bytes: usize) -
 }
 
 
-fn validate_color(color: &Color) -> ApngResult<()> {
+fn validate_color(color: Color) -> ApngResult<()> {
     use self::Color::*;
 
     match color {
         Grayscale(b) if [1, 2, 4, 8, 16].contains(&b) => (),
-        GrayscaleA(b) | RGB(b) | RGBA(b) if [8, 16].contains(b) => (),
+        GrayscaleA(b) | RGB(b) | RGBA(b) if [8, 16].contains(&b) => (),
         _ => return Err(ErrorKind::InvalidColor)?,
     };
 

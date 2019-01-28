@@ -19,7 +19,7 @@ pub struct Meta {
     pub width: u32,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Color {
     Grayscale(u8),
     GrayscaleA(u8),
@@ -60,18 +60,18 @@ pub enum BlendOperator {
 
 
 impl Color {
-    pub fn bit_depth(&self) -> u8 {
+    pub fn bit_depth(self) -> u8 {
         use self::Color::*;
 
-        match *self {
+        match self {
             Grayscale(b) | GrayscaleA(b) | RGB(b) | RGBA(b) => b,
         }
     }
 
-    pub fn pixel_bytes(&self) -> usize {
+    pub fn pixel_bytes(self) -> usize {
         use self::Color::*;
 
-        match *self {
+        match self {
             Grayscale(16) => 2,
             Grayscale(_) => 1,
             GrayscaleA(16) => 4,

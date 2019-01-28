@@ -5,29 +5,30 @@ use std::fmt;
 use std::io::Error as IOError;
 use std::num::ParseIntError;
 
+use image::ImageError;
 
-pub type ApngResult<T> = Result<T, Error>;
+use apng_encoder::apng::errors::{Error as ApngError};
+
+pub type AppResult<T> = Result<T, Error>;
 
 
 
 #[derive(Fail, Debug)]
 pub enum ErrorKind {
-    #[fail(display = "Invalid argument")]
-    InvalidArgument,
-    #[fail(display = "Invalid color")]
-    InvalidColor,
+    #[fail(display = "APNG Error")]
+    Apng,
+    #[fail(display = "Image error")]
+    Image,
+    #[fail(display = "Intermingling color type")]
+    InterminglingColorType,
+    #[fail(display = "Invalid option value")]
+    InvalidOptionValue,
     #[fail(display = "IO error")]
     Io,
-    #[fail(display = "Not enough frames")]
-    NotEnoughFrames,
     #[fail(display = "Not enough argument")]
     NotEnoughArgument,
-    #[fail(display = "Too large image")]
-    TooLargeImage,
-    #[fail(display = "Too many frames")]
-    TooManyFrames,
-    #[fail(display = "Too small image")]
-    TooSmallImage,
+    #[fail(display = "Unsupport color type")]
+    UnsupportedColor,
 }
 
 #[derive(Debug)]
@@ -49,16 +50,6 @@ impl Fail for Error {
 impl Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         Display::fmt(&self.inner, f)
-    }
-}
-
-impl Error {
-    pub fn new(inner: Context<ErrorKind>) -> Error {
-        Error { inner }
-    }
-
-    pub fn kind(&self) -> &ErrorKind {
-        self.inner.get_context()
     }
 }
 
@@ -87,7 +78,23 @@ impl From<IOError> for Error {
 impl From<ParseIntError> for Error {
     fn from(error: ParseIntError) -> Error {
         Error {
-            inner: error.context(ErrorKind::InvalidArgument),
+            inner: error.context(ErrorKind::InvalidOptionValue),
+        }
+    }
+}
+
+impl From<ApngError> for Error {
+    fn from(error: ApngError) -> Error {
+        Error {
+            inner: error.context(ErrorKind::Apng),
+        }
+    }
+}
+
+impl From<ImageError> for Error {
+    fn from(error: ImageError) -> Error {
+        Error {
+            inner: error.context(ErrorKind::Image),
         }
     }
 }
