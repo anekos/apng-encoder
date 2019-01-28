@@ -1,11 +1,20 @@
 
 use std::env;
-use std::io::{stdout, Write, BufWriter};
+use std::fs::File;
+use std::io::{stdout, BufWriter};
 use std::process::exit;
 
-use apng_encoder::apng::Delay;
-use apng_encoder::apng::errors::{ApngResult, ErrorKind};
+use failure::Fail;
+use image::ImageDecoder;
+use image::png::PNGDecoder;
+
+use apng_encoder::apng::{Color, Delay, Frame, Meta};
+use apng_encoder::apng::errors::{ApngResult};
 use apng_encoder::apng::encoder::Encoder;
+
+mod errors;
+
+use crate::errors::{AppResult, ErrorKind};
 
 
 
@@ -20,52 +29,92 @@ struct Entry {
     parameter: EntryParameter,
 }
 
-
-fn main() {
-    let entries = match parse_args() {
-        Ok(entries) => entries,
-        Err(message) => {
-            eprintln!("{}", message);
-            exit(1);
-        },
-    };
-
-    let out = stdout();
-    let mut out = BufWriter::new(out.lock());
-    let mut encoder = Encoder::create(&mut out, meta).unwrap();
-
-    for entry in entries {
-    }
+#[derive(Debug, Default)]
+struct Setting {
+    plays: u32,
+    entries: Vec<Entry>,
 }
 
 
-fn parse_args() -> ApngResult<Vec<Entry>> {
-    let mut entries = vec![];
+fn main() {
+    if let Err(err) = app() {
+        let mut fail: &Fail = &err;
+        let mut message = err.to_string();
 
-    let mut args = env::args();
-    let _ = args.next().unwrap();
+        while let Some(cause) = fail.cause() {
+            message.push_str(&format!("\n\tcaused by: {}", cause));
+            fail = cause;
+        }
+
+        eprintln!("Error: {}", message);
+
+        exit(1);
+    }
+}
+
+fn app() -> AppResult<()> {
+    let mut setting = parse_args()?;
+
+    let out = stdout();
+    let mut out = BufWriter::new(out.lock());
+
+    let mut encoder;
+
+    if let Some(first) = setting.entries.pop() {
+        let file = File::open(&first.filepath)?;
+        let decoder = PNGDecoder::new(file)?;
+        let (width, height) = decoder.dimensions();
+        let meta = Meta {
+            width: width as u32,
+            height: height as u32,
+            color: from_color_type(&decoder.colortype())?,
+            frames: setting.entries.len() as u32 + 1,
+            plays: Some(setting.plays),
+        };
+        encoder = Encoder::create(&mut out, meta)?;
+        let image_data: Vec<u8> = decoder.read_image()?;
+        encoder.write_frame(&image_data, Some(&first.parameter.to_frame()), None, None)?;
+    } else {
+        return Err(ErrorKind::NotEnoughArgument)?;
+    }
+
+    for entry in setting.entries {
+        let file = File::open(&entry.filepath)?;
+        let decoder = PNGDecoder::new(file)?;
+        encoder.write_frame(&decoder.read_image()?, Some(&entry.parameter.to_frame()), None, None)?;
+    }
+
+    encoder.finish()?;
+
+    Ok(())
+}
+
+
+fn parse_args() -> AppResult<Setting> {
+    let mut setting = Setting::default();
+
+    let mut args = env::args().skip(1);
     let mut parameter = EntryParameter::default();
 
     while let Some(arg) = args.next() {
         let mut next = || args.next().ok_or(ErrorKind::NotEnoughArgument);
 
         match &*arg {
-            "-d" | "--delay" => {
-                 let value = next()?;
-                parameter.delay = Some(parse_delay(&value)?)
-            },
+            "-d" | "--delay" =>
+                parameter.delay = Some(parse_delay(&next()?)?),
+            "-p" | "--plays" =>
+                setting.plays = next()?.parse()?,
             filepath => {
                 let entry = Entry {
                     filepath: filepath.to_owned(),
                     parameter: parameter.clone(),
                 };
-                entries.push(entry);
+                setting.entries.push(entry);
             }
         }
-        println!("arg: {:?}", arg);
     }
 
-    Ok(entries)
+    Ok(setting)
 }
 
 
@@ -79,4 +128,29 @@ fn parse_delay(s: &str) -> ApngResult<Delay> {
 
     let numerator = s.parse()?;
     Ok(Delay { numerator, denominator: 1000 })
+}
+
+
+fn from_color_type(color_type: &image::ColorType) -> AppResult<Color> {
+    use image::ColorType::*;
+
+    let result = match color_type {
+        Gray(bits) => Color::Grayscale(*bits),
+        RGB(bits) => Color::RGB(*bits),
+        GrayA(bits) => Color::GrayscaleA(*bits),
+        RGBA(bits) => Color::RGBA(*bits),
+        BGR(_) | BGRA(_) | Palette(_) => return Err(ErrorKind::UnsupportedColor)?,
+    };
+
+    Ok(result)
+}
+
+
+impl EntryParameter {
+    fn to_frame(&self) -> Frame {
+        Frame {
+            delay: self.delay,
+            ..Default::default()
+        }
+    }
 }
