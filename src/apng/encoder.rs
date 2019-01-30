@@ -30,9 +30,9 @@ use super::errors::{ApngResult, ErrorKind};
 ///     plays: None, // Infinite loop
 /// };
 ///
-/// // Delay = 2 seconds
+/// // Delay = 1/2 (0.5) seconds
 /// let frame = Frame {
-///     delay: Some(Delay::new(2, 1)),
+///     delay: Some(Delay::new(1, 2)),
 ///     ..Default::default()
 /// };
 ///
