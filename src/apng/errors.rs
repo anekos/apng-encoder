@@ -1,93 +1,40 @@
 
-use failure::{Backtrace, Context, Fail};
-use std::fmt::Display;
-use std::fmt;
+use failure::Fail;
 use std::io::Error as IOError;
-use std::num::ParseIntError;
 
 
-pub type ApngResult<T> = Result<T, Error>;
+pub type ApngResult<T> = Result<T, AppError>;
 
 
 
 #[derive(Fail, Debug)]
-pub enum ErrorKind {
+pub enum AppError {
     #[fail(display = "Invalid argument")]
     InvalidArgument,
     #[fail(display = "Invalid color")]
     InvalidColor,
-    #[fail(display = "IO error")]
-    Io,
-    #[fail(display = "Not enough frames")]
-    NotEnoughFrames,
+    #[fail(display = "IO error: {}", 0)]
+    Io(IOError),
+    #[fail(display = "Not enough frames: expected={}, actual={}", 0, 1)]
+    NotEnoughFrames(usize, usize),
     #[fail(display = "Not enough argument")]
     NotEnoughArgument,
     #[fail(display = "Too large image")]
     TooLargeImage,
-    #[fail(display = "Too many frames")]
-    TooManyFrames,
+    #[fail(display = "Too many frames: expected={}, actual={}", 0, 1)]
+    TooManyFrames(usize, usize),
     #[fail(display = "Too small image")]
     TooSmallImage,
 }
 
-#[derive(Debug)]
-pub struct Error {
-    inner: Context<ErrorKind>,
-}
-
-
-impl Fail for Error {
-    fn cause(&self) -> Option<&Fail> {
-        self.inner.cause()
-    }
-
-    fn backtrace(&self) -> Option<&Backtrace> {
-        self.inner.backtrace()
-    }
-}
-
-impl Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        Display::fmt(&self.inner, f)
-    }
-}
-
-impl Error {
-    pub fn new(inner: Context<ErrorKind>) -> Error {
-        Error { inner }
-    }
-
-    pub fn kind(&self) -> &ErrorKind {
-        self.inner.get_context()
-    }
-}
-
-impl From<ErrorKind> for Error {
-    fn from(kind: ErrorKind) -> Error {
-        Error {
-            inner: Context::new(kind),
+macro_rules! define_error {
+    ($source:ty, $kind:tt) => {
+        impl From<$source> for AppError {
+            fn from(error: $source) -> AppError {
+                AppError::$kind(error)
+            }
         }
     }
 }
 
-impl From<Context<ErrorKind>> for Error {
-    fn from(inner: Context<ErrorKind>) -> Error {
-        Error { inner }
-    }
-}
-
-impl From<IOError> for Error {
-    fn from(error: IOError) -> Error {
-        Error {
-            inner: error.context(ErrorKind::Io),
-        }
-    }
-}
-
-impl From<ParseIntError> for Error {
-    fn from(error: ParseIntError) -> Error {
-        Error {
-            inner: error.context(ErrorKind::InvalidArgument),
-        }
-    }
-}
+define_error!(std::io::Error, Io);

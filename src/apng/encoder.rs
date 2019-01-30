@@ -9,7 +9,7 @@ use flate2::Crc;
 use flate2::write::ZlibEncoder;
 
 use super::{Color, Frame, Meta};
-use super::errors::{ApngResult, ErrorKind};
+use super::errors::{ApngResult, AppError};
 
 
 /// APNG Encoder
@@ -129,7 +129,7 @@ impl<'a, F: io::Write> Encoder<'a, F> {
 
     pub fn finish(mut self) -> ApngResult<()> {
         if self.written_frames < self.meta.frames as usize {
-            return Err(ErrorKind::NotEnoughFrames)?;
+            return Err(AppError::NotEnoughFrames(self.meta.frames as usize, self.written_frames));
         }
         let zero: [u8;0] = [];
         self.write_chunk(*b"IEND", &zero)
@@ -138,7 +138,7 @@ impl<'a, F: io::Write> Encoder<'a, F> {
     pub fn write_frame(&mut self, image_data: &[u8], frame: Option<&Frame>, filter: Option<Filter>, row_stride: Option<usize>) -> ApngResult<()> {
         self.written_frames += 1;
         if (self.meta.frames as usize) < self.written_frames {
-            return Err(ErrorKind::TooManyFrames)?;
+            return Err(AppError::TooManyFrames(self.meta.frames as usize, self.written_frames));
         }
         if self.sequence == 0 {
             self.write_default_image(image_data, row_stride, frame, filter)
@@ -167,10 +167,10 @@ impl<'a, F: io::Write> Encoder<'a, F> {
         let row_stride = row_stride.unwrap_or_else(|| rect.width as usize * self.meta.color.pixel_bytes());
         let data_height = (image_data.len() / row_stride) as u32;
         if self.meta.width < rect.right() || self.meta.height < rect.bottom() || rect.bottom() < data_height{
-            return Err(ErrorKind::TooLargeImage)?;
+            return Err(AppError::TooLargeImage);
         }
         if data_height < rect.height {
-            return Err(ErrorKind::TooSmallImage)?;
+            return Err(AppError::TooSmallImage);
         }
         Ok(row_stride)
     }
@@ -446,7 +446,7 @@ fn validate_color(color: Color) -> ApngResult<()> {
     match color {
         Grayscale(b) if [1, 2, 4, 8, 16].contains(&b) => (),
         GrayscaleA(b) | RGB(b) | RGBA(b) if [8, 16].contains(&b) => (),
-        _ => return Err(ErrorKind::InvalidColor)?,
+        _ => return Err(AppError::InvalidColor),
     };
 
     Ok(())
@@ -535,7 +535,7 @@ mod tests {
         });
     }
 
-    #[test]#[should_panic(expected="Too many frames")]
+    #[test]#[should_panic(expected="TooManyFrames(1, 2)")]
     fn test_many_frames_validation() {
         let mut buffer = vec![];
         let meta = Meta { width: 2, height: 2, color: Color::RGB(8), frames: 1, plays: None };
@@ -544,7 +544,7 @@ mod tests {
         encoder.write_frame(&FOUR, None, None, None).unwrap();
     }
 
-    #[test]#[should_panic(expected="Not enough frames")]
+    #[test]#[should_panic(expected="NotEnoughFrames(2, 1)")]
     fn test_not_enough_frames_validation() {
         let mut buffer = vec![];
         let meta = Meta { width: 2, height: 2, color: Color::RGB(8), frames: 2, plays: None };
@@ -553,7 +553,7 @@ mod tests {
         encoder.finish().unwrap();
     }
 
-    #[test]#[should_panic(expected="Too large image")]
+    #[test]#[should_panic(expected="TooLargeImage")]
     fn test_too_large_validation() {
         let mut buffer = vec![];
         let meta = Meta { width: 2, height: 2, color: Color::RGB(8), frames: 1, plays: None };
@@ -564,7 +564,7 @@ mod tests {
         encoder.finish().unwrap();
     }
 
-    #[test]#[should_panic(expected="Too small image")]
+    #[test]#[should_panic(expected="TooSmallImage")]
     fn test_too_small_validation() {
         let mut buffer = vec![];
         let meta = Meta { width: 2, height: 2, color: Color::RGB(8), frames: 1, plays: None };
@@ -573,7 +573,7 @@ mod tests {
         encoder.finish().unwrap();
     }
 
-    #[test]#[should_panic(expected="Too large image")]
+    #[test]#[should_panic(expected="TooLargeImage")]
     fn test_too_large_validation_with_offset_x() {
         let mut buffer = vec![];
         let meta = Meta { width: 2, height: 2, color: Color::RGB(8), frames: 1, plays: None };
@@ -583,7 +583,7 @@ mod tests {
         encoder.finish().unwrap();
     }
 
-    #[test]#[should_panic(expected="Too large image")]
+    #[test]#[should_panic(expected="TooLargeImage")]
     fn test_too_large_validation_with_offset_y() {
         let mut buffer = vec![];
         let meta = Meta { width: 2, height: 2, color: Color::RGB(8), frames: 1, plays: None };
@@ -593,7 +593,7 @@ mod tests {
         encoder.finish().unwrap();
     }
 
-    #[test]#[should_panic(expected="Invalid color")]
+    #[test]#[should_panic(expected="InvalidColor")]
     fn test_color_validation() {
         let mut buffer = vec![];
         let meta = Meta { width: 2, height: 2, color: Color::RGB(17), frames: 2, plays: None };
