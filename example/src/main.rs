@@ -1,7 +1,7 @@
 
 use std::env;
-use std::fs::File;
-use std::io::{stdout, BufWriter, Read};
+use std::fs::{File, OpenOptions};
+use std::io::{stdout, BufWriter, Read, Write};
 use std::process::exit;
 
 use failure::Fail;
@@ -19,7 +19,7 @@ use crate::errors::{AppResult, AppError};
 #[derive(Debug, Default, Clone)]
 struct EntryParameter {
     delay: Option<Delay>,
-    rect: Rectangle,
+    offset: Offset,
 }
 
 #[derive(Debug, Clone)]
@@ -30,8 +30,15 @@ struct Entry {
 
 #[derive(Debug, Default)]
 struct Setting {
-    plays: u32,
+    default_image: Option<String>,
     entries: Vec<Entry>,
+    plays: u32,
+}
+
+#[derive(Debug, Default)]
+struct Parsed {
+    output: Option<String>,
+    setting: Setting,
 }
 
 struct Image {
@@ -42,11 +49,9 @@ struct Image {
 }
 
 #[derive(Debug, Clone, Copy, Default)]
-struct Rectangle {
+struct Offset {
     x: Option<u32>,
     y: Option<u32>,
-    height: Option<u32>,
-    width: Option<u32>,
 }
 
 
@@ -65,18 +70,25 @@ fn main() {
 }
 
 fn print_usage() {
-    eprintln!("Usage:");
-    eprintln!("  apngc {{[--delay|-d <DELAY>] [-x <X>] [-y <Y>] [--width|-w <WIDTH>] [--height|-h <HEIGHT>] <IMAGE_FILE>}}...");
-    eprintln!("Delay format:");
-    eprintln!("  `1/2` for 0.5 seconds");
-    eprintln!("  `3/1` for 3 seconds");
+    eprintln!(include_str!("usage.txt"));
 }
 
 fn app() -> AppResult<()> {
-    let setting = parse_args()?;
+    let parsed = parse_args()?;
 
-    let out = stdout();
-    let mut out = BufWriter::new(out.lock());
+    if let Some(output) = parsed.output {
+        let mut file = OpenOptions::new().write(true).create(true).open(output)?;
+        compile(&mut file, &parsed.setting)
+    } else {
+        let out = stdout();
+        let mut out = out.lock();
+        compile(&mut out, &parsed.setting)
+    }
+}
+
+
+fn compile<T: Write>(out: &mut T, setting: &Setting) -> AppResult<()> {
+    let mut out = BufWriter::new(out);
 
     let mut encoder;
     let first_color;
@@ -92,6 +104,9 @@ fn app() -> AppResult<()> {
         };
         first_color = image.color;
         encoder = Encoder::create(&mut out, meta)?;
+        if let Some(default_image) = setting.default_image.as_ref() {
+            encoder.write_default_image(&load_image(default_image)?.data, None, None)?;
+        }
         let frame = make_frame(&first.parameter, image.width, image.height);
         encoder.write_frame(&image.data, Some(&frame), None, None)?;
     } else {
@@ -113,8 +128,9 @@ fn app() -> AppResult<()> {
 }
 
 
-fn parse_args() -> AppResult<Setting> {
+fn parse_args() -> AppResult<Parsed> {
     let mut setting = Setting::default();
+    let mut output = None;
 
     let mut args = env::args().skip(1);
     let mut parameter = EntryParameter::default();
@@ -124,7 +140,7 @@ fn parse_args() -> AppResult<Setting> {
         let mut next = || args.next().ok_or(AppError::NotEnoughArgument);
 
         match &*arg {
-            "--help" => {
+            "-h" | "--help" => {
                 print_usage();
                 exit(0);
             },
@@ -133,13 +149,13 @@ fn parse_args() -> AppResult<Setting> {
             "-p" | "--plays" =>
                 setting.plays = next()?.parse()?,
             "-x" =>
-                parameter.rect.x = Some(next()?.parse()?),
+                parameter.offset.x = Some(next()?.parse()?),
             "-y" =>
-                parameter.rect.y = Some(next()?.parse()?),
-            "-h" | "--height" =>
-                parameter.rect.height = Some(next()?.parse()?),
-            "-w" | "--width" =>
-                parameter.rect.width = Some(next()?.parse()?),
+                parameter.offset.y = Some(next()?.parse()?),
+            "--default" =>
+                setting.default_image = Some(next()?),
+            "-o" | "--output" =>
+                output = Some(next()?),
             filepath => {
                 let entry = Entry {
                     filepath: filepath.to_owned(),
@@ -150,7 +166,7 @@ fn parse_args() -> AppResult<Setting> {
         }
     }
 
-    Ok(setting)
+    Ok(Parsed { setting, output })
 }
 
 
@@ -196,8 +212,8 @@ fn load_image(filepath: &str) -> AppResult<Image> {
 fn make_frame(param: &EntryParameter, width: u32, height: u32) -> Frame {
     Frame {
         delay: param.delay,
-        width: Some(param.rect.width.unwrap_or(width)),
-        height: Some(param.rect.width.unwrap_or(height)),
+        width: Some(width),
+        height: Some(height),
         ..Default::default()
     }
 }
