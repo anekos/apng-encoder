@@ -8,7 +8,7 @@ pub type AppResult<T> = Result<T, AppError>;
 
 #[derive(Fail, Debug)]
 pub enum AppError {
-    #[fail(display = "APNG Error")]
+    #[fail(display = "APNG Error: {}", 0)]
     Apng(apng_encoder::apng::errors::ApngError),
     #[fail(display = "Image error: {}", 0)]
     Image(image::ImageError),
