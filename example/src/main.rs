@@ -119,6 +119,7 @@ fn parse_args() -> AppResult<Setting> {
     let mut args = env::args().skip(1);
     let mut parameter = EntryParameter::default();
 
+    #[allow(clippy::while_let_on_iterator)]
     while let Some(arg) = args.next() {
         let mut next = || args.next().ok_or(AppError::NotEnoughArgument);
 
@@ -166,14 +167,14 @@ fn parse_delay(s: &str) -> AppResult<Delay> {
 }
 
 
-fn from_color_type(color_type: &image::ColorType) -> AppResult<Color> {
+fn from_color_type(color_type: image::ColorType) -> AppResult<Color> {
     use image::ColorType::*;
 
     let result = match color_type {
-        Gray(bits) => Color::Grayscale(*bits),
-        RGB(bits) => Color::RGB(*bits),
-        GrayA(bits) => Color::GrayscaleA(*bits),
-        RGBA(bits) => Color::RGBA(*bits),
+        Gray(bits) => Color::Grayscale(bits),
+        RGB(bits) => Color::RGB(bits),
+        GrayA(bits) => Color::GrayscaleA(bits),
+        RGBA(bits) => Color::RGBA(bits),
         BGR(_) | BGRA(_) | Palette(_) => return Err(AppError::UnsupportedColor)?,
     };
 
@@ -187,7 +188,7 @@ fn load_image(filepath: &str) -> AppResult<Image> {
     file.read_to_end(&mut buffer)?;
     let image = image::load_from_memory(&buffer)?;
     let (width, height) = image.dimensions();
-    let color = from_color_type(&image.color())?;
+    let color = from_color_type(image.color())?;
     Ok(Image { width, color, data: image.raw_pixels(), height})
 }
 
