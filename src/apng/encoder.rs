@@ -9,7 +9,7 @@ use flate2::Crc;
 use flate2::write::ZlibEncoder;
 
 use super::{Color, Frame, Meta};
-use super::errors::{ApngResult, AppError};
+use super::errors::{ApngResult, ApngError};
 
 
 /// APNG Encoder
@@ -129,7 +129,7 @@ impl<'a, F: io::Write> Encoder<'a, F> {
 
     pub fn finish(mut self) -> ApngResult<()> {
         if self.written_frames < self.meta.frames as usize {
-            return Err(AppError::NotEnoughFrames(self.meta.frames as usize, self.written_frames));
+            return Err(ApngError::NotEnoughFrames(self.meta.frames as usize, self.written_frames));
         }
         let zero: [u8;0] = [];
         self.write_chunk(*b"IEND", &zero)
@@ -138,7 +138,7 @@ impl<'a, F: io::Write> Encoder<'a, F> {
     pub fn write_frame(&mut self, image_data: &[u8], frame: Option<&Frame>, filter: Option<Filter>, row_stride: Option<usize>) -> ApngResult<()> {
         self.written_frames += 1;
         if (self.meta.frames as usize) < self.written_frames {
-            return Err(AppError::TooManyFrames(self.meta.frames as usize, self.written_frames));
+            return Err(ApngError::TooManyFrames(self.meta.frames as usize, self.written_frames));
         }
         if self.sequence == 0 {
             self.write_default_image(image_data, row_stride, frame, filter)
@@ -167,10 +167,10 @@ impl<'a, F: io::Write> Encoder<'a, F> {
         let row_stride = row_stride.unwrap_or_else(|| rect.width as usize * self.meta.color.pixel_bytes());
         let data_height = (image_data.len() / row_stride) as u32;
         if self.meta.width < rect.right() || self.meta.height < rect.bottom() || rect.bottom() < data_height{
-            return Err(AppError::TooLargeImage);
+            return Err(ApngError::TooLargeImage);
         }
         if data_height < rect.height {
-            return Err(AppError::TooSmallImage);
+            return Err(ApngError::TooSmallImage);
         }
         Ok(row_stride)
     }
@@ -446,7 +446,7 @@ fn validate_color(color: Color) -> ApngResult<()> {
     match color {
         Grayscale(b) if [1, 2, 4, 8, 16].contains(&b) => (),
         GrayscaleA(b) | RGB(b) | RGBA(b) if [8, 16].contains(&b) => (),
-        _ => return Err(AppError::InvalidColor),
+        _ => return Err(ApngError::InvalidColor),
     };
 
     Ok(())

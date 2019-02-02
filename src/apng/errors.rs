@@ -3,12 +3,12 @@ use failure::Fail;
 use std::io::Error as IOError;
 
 
-pub type ApngResult<T> = Result<T, AppError>;
+pub type ApngResult<T> = Result<T, ApngError>;
 
 
 
 #[derive(Fail, Debug)]
-pub enum AppError {
+pub enum ApngError {
     #[fail(display = "Invalid argument")]
     InvalidArgument,
     #[fail(display = "Invalid color")]
@@ -29,9 +29,9 @@ pub enum AppError {
 
 macro_rules! define_error {
     ($source:ty, $kind:tt) => {
-        impl From<$source> for AppError {
-            fn from(error: $source) -> AppError {
-                AppError::$kind(error)
+        impl From<$source> for ApngError {
+            fn from(error: $source) -> ApngError {
+                ApngError::$kind(error)
             }
         }
     }
