@@ -8,12 +8,11 @@ use failure::Fail;
 use image::GenericImageView;
 
 use apng_encoder::apng::{Color, Delay, Frame, Meta};
-use apng_encoder::apng::errors::{ApngResult};
 use apng_encoder::apng::encoder::Encoder;
 
 mod errors;
 
-use crate::errors::{AppResult, ErrorKind};
+use crate::errors::{AppResult, AppError};
 
 
 
@@ -96,13 +95,13 @@ fn app() -> AppResult<()> {
         let frame = make_frame(&first.parameter, image.width, image.height);
         encoder.write_frame(&image.data, Some(&frame), None, None)?;
     } else {
-        return Err(ErrorKind::NotEnoughArgument)?;
+        return Err(AppError::NotEnoughArgument);
     }
 
     for entry in setting.entries.iter().skip(1) {
         let image = load_image(&entry.filepath)?;
         if first_color != image.color {
-            return Err(ErrorKind::InterminglingColorType)?;
+            return Err(AppError::InterminglingColorType);
         }
         let frame = make_frame(&entry.parameter, image.width, image.height);
         encoder.write_frame(&image.data, Some(&frame), None, None)?;
@@ -121,7 +120,7 @@ fn parse_args() -> AppResult<Setting> {
     let mut parameter = EntryParameter::default();
 
     while let Some(arg) = args.next() {
-        let mut next = || args.next().ok_or(ErrorKind::NotEnoughArgument);
+        let mut next = || args.next().ok_or(AppError::NotEnoughArgument);
 
         match &*arg {
             "--help" => {
@@ -154,7 +153,7 @@ fn parse_args() -> AppResult<Setting> {
 }
 
 
-fn parse_delay(s: &str) -> ApngResult<Delay> {
+fn parse_delay(s: &str) -> AppResult<Delay> {
     if let Some(div) = s.find('/') {
         let (numerator, denominator) = s.split_at(div);
         let numerator = numerator.parse()?;
@@ -175,7 +174,7 @@ fn from_color_type(color_type: &image::ColorType) -> AppResult<Color> {
         RGB(bits) => Color::RGB(*bits),
         GrayA(bits) => Color::GrayscaleA(*bits),
         RGBA(bits) => Color::RGBA(*bits),
-        BGR(_) | BGRA(_) | Palette(_) => return Err(ErrorKind::UnsupportedColor)?,
+        BGR(_) | BGRA(_) | Palette(_) => return Err(AppError::UnsupportedColor)?,
     };
 
     Ok(result)

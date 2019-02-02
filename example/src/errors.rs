@@ -1,100 +1,40 @@
 
-use failure::{Backtrace, Context, Fail};
-use std::fmt::Display;
-use std::fmt;
-use std::io::Error as IOError;
-use std::num::ParseIntError;
+use failure::Fail;
 
-use image::ImageError;
 
-use apng_encoder::apng::errors::{Error as ApngError};
 
-pub type AppResult<T> = Result<T, Error>;
-
+pub type AppResult<T> = Result<T, AppError>;
 
 
 #[derive(Fail, Debug)]
-pub enum ErrorKind {
+pub enum AppError {
     #[fail(display = "APNG Error")]
-    Apng,
-    #[fail(display = "Image error")]
-    Image,
+    Apng(apng_encoder::apng::errors::ApngError),
+    #[fail(display = "Image error: {}", 0)]
+    Image(image::ImageError),
+    #[fail(display = "Not a integer: {}", 0)]
+    Int(std::num::ParseIntError),
     #[fail(display = "Intermingling color type")]
     InterminglingColorType,
-    #[fail(display = "Invalid option value")]
-    InvalidOptionValue,
-    #[fail(display = "IO error")]
-    Io,
+    #[fail(display = "IO error: {}", 0)]
+    Io(std::io::Error),
     #[fail(display = "Not enough argument")]
     NotEnoughArgument,
     #[fail(display = "Unsupport color type")]
     UnsupportedColor,
 }
 
-#[derive(Debug)]
-pub struct Error {
-    inner: Context<ErrorKind>,
-}
-
-
-impl Fail for Error {
-    fn cause(&self) -> Option<&Fail> {
-        self.inner.cause()
-    }
-
-    fn backtrace(&self) -> Option<&Backtrace> {
-        self.inner.backtrace()
-    }
-}
-
-impl Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        Display::fmt(&self.inner, f)
-    }
-}
-
-impl From<ErrorKind> for Error {
-    fn from(kind: ErrorKind) -> Error {
-        Error {
-            inner: Context::new(kind),
+macro_rules! define_error {
+    ($source:ty, $kind:ident) => {
+        impl From<$source> for AppError {
+            fn from(error: $source) -> AppError {
+                AppError::$kind(error)
+            }
         }
     }
 }
 
-impl From<Context<ErrorKind>> for Error {
-    fn from(inner: Context<ErrorKind>) -> Error {
-        Error { inner }
-    }
-}
-
-impl From<IOError> for Error {
-    fn from(error: IOError) -> Error {
-        Error {
-            inner: error.context(ErrorKind::Io),
-        }
-    }
-}
-
-impl From<ParseIntError> for Error {
-    fn from(error: ParseIntError) -> Error {
-        Error {
-            inner: error.context(ErrorKind::InvalidOptionValue),
-        }
-    }
-}
-
-impl From<ApngError> for Error {
-    fn from(error: ApngError) -> Error {
-        Error {
-            inner: error.context(ErrorKind::Apng),
-        }
-    }
-}
-
-impl From<ImageError> for Error {
-    fn from(error: ImageError) -> Error {
-        Error {
-            inner: error.context(ErrorKind::Image),
-        }
-    }
-}
+define_error!(std::io::Error, Io);
+define_error!(std::num::ParseIntError, Int);
+define_error!(image::ImageError, Image);
+define_error!(apng_encoder::apng::errors::ApngError, Apng);
