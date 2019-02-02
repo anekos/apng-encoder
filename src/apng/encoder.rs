@@ -107,6 +107,7 @@ pub enum Filter {
 #[derive(Clone, Copy, Debug)]
 pub struct Rectangle {
     height: u32,
+    modified: bool,
     width: u32,
     x: u32,
     y: u32,
@@ -169,7 +170,8 @@ impl<'a, F: io::Write> Encoder<'a, F> {
         let height = frame.and_then(|it| it.height).unwrap_or(self.meta.height);
         let x = frame.and_then(|it| it.x).unwrap_or(0);
         let y = frame.and_then(|it| it.y).unwrap_or(0);
-        Rectangle { width, height, x, y }
+        let modified = x != 0 || y != 0 || width != self.meta.width || height != self.meta.height;
+        Rectangle { width, height, x, y, modified }
     }
 
     fn next_sequence(&mut self) -> u32 {
@@ -211,6 +213,9 @@ impl<'a, F: io::Write> Encoder<'a, F> {
 
     fn write_animation_frame_with_default(&mut self, image_data: &[u8], row_stride: Option<usize>, frame: Option<&Frame>, filter: Option<Filter>) -> ApngResult<()> {
         let rect = self.write_frame_control(frame)?;
+        if rect.modified {
+            return Err(ApngError::InvalidDefaultImageRectangle);
+        }
         let mut buffer = vec![];
         self.make_image_data(image_data, row_stride, &mut buffer, rect, filter)?;
         self.write_chunk(*b"IDAT", &buffer)?;
@@ -595,18 +600,56 @@ mod tests {
     #[test]#[should_panic(expected="TooLargeImage")]
     fn test_too_large_validation_with_offset_x() {
         let mut buffer = vec![];
-        let meta = Meta { width: 2, height: 2, color: Color::RGB(8), frames: 1, plays: None };
+        let meta = Meta { width: 2, height: 2, color: Color::RGB(8), frames: 2, plays: None };
         let mut encoder = Encoder::create(&mut buffer, meta).unwrap();
         let frame = Frame { x: Some(1), ..Default::default() };
+        encoder.write_frame(&FOUR, None, None, None).unwrap();
         encoder.write_frame(&FOUR, Some(&frame), None, None).unwrap();
     }
 
     #[test]#[should_panic(expected="TooLargeImage")]
     fn test_too_large_validation_with_offset_y() {
         let mut buffer = vec![];
-        let meta = Meta { width: 2, height: 2, color: Color::RGB(8), frames: 1, plays: None };
+        let meta = Meta { width: 2, height: 2, color: Color::RGB(8), frames: 2, plays: None };
         let mut encoder = Encoder::create(&mut buffer, meta).unwrap();
         let frame = Frame { y: Some(1), ..Default::default() };
+        encoder.write_frame(&FOUR, None, None, None).unwrap();
+        encoder.write_frame(&FOUR, Some(&frame), None, None).unwrap();
+    }
+
+    #[test]#[should_panic(expected="InvalidDefaultImageRectangle")]
+    fn test_default_image_offset_validation() {
+        let mut buffer = vec![];
+        let meta = Meta { width: 2, height: 2, color: Color::RGB(8), frames: 1, plays: None };
+        let mut encoder = Encoder::create(&mut buffer, meta).unwrap();
+        let frame = Frame { x: Some(1), ..Default::default() };
+        encoder.write_frame(&FOUR, Some(&frame), None, None).unwrap();
+    }
+
+    #[test]
+    fn test_default_image_offset_validation_ok() {
+        let mut buffer = vec![];
+        let meta = Meta { width: 2, height: 2, color: Color::RGB(8), frames: 1, plays: None };
+        let mut encoder = Encoder::create(&mut buffer, meta).unwrap();
+        let frame = Frame { y: Some(0), ..Default::default() };
+        encoder.write_frame(&FOUR, Some(&frame), None, None).unwrap();
+    }
+
+    #[test]#[should_panic(expected="InvalidDefaultImageRectangle")]
+    fn test_default_image_size_validation() {
+        let mut buffer = vec![];
+        let meta = Meta { width: 2, height: 2, color: Color::RGB(8), frames: 1, plays: None };
+        let mut encoder = Encoder::create(&mut buffer, meta).unwrap();
+        let frame = Frame { width: Some(1), ..Default::default() };
+        encoder.write_frame(&FOUR, Some(&frame), None, None).unwrap();
+    }
+
+    #[test]
+    fn test_default_image_size_validation_ok() {
+        let mut buffer = vec![];
+        let meta = Meta { width: 2, height: 2, color: Color::RGB(8), frames: 1, plays: None };
+        let mut encoder = Encoder::create(&mut buffer, meta).unwrap();
+        let frame = Frame { height: Some(2), ..Default::default() };
         encoder.write_frame(&FOUR, Some(&frame), None, None).unwrap();
     }
 

@@ -15,6 +15,8 @@ pub enum ApngError {
     InvalidArgument,
     #[fail(display = "Invalid color")]
     InvalidColor,
+    #[fail(display = "Invalid default image size or offset")]
+    InvalidDefaultImageRectangle,
     #[fail(display = "IO error: {}", 0)]
     Io(IOError),
     #[fail(display = "Default image already exists")]
