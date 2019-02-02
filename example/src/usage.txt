@@ -8,6 +8,6 @@ Options:
   -w, --width WIDTH
   -h, --height HEIGHT
 
-Delay format:");
-  `1/2` for 0.5 seconds");
-  `3/1` for 3 seconds");
+Delay format:
+  `1/2` for 0.5 seconds
+  `3/1` for 3 seconds
