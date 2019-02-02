@@ -88,6 +88,7 @@ use super::errors::{ApngResult, ApngError};
 
 
 pub struct Encoder<'a, F: io::Write> {
+    default_image: bool,
     meta: Meta,
     sequence: u32,
     writer: &'a mut F,
@@ -116,6 +117,7 @@ impl<'a, F: io::Write> Encoder<'a, F> {
     pub fn create(writer: &'a mut F, meta: Meta) -> ApngResult<Self> {
         validate_color(meta.color)?;
         let mut instance = Encoder {
+            default_image: false,
             meta,
             sequence: 0,
             writer,
@@ -135,16 +137,39 @@ impl<'a, F: io::Write> Encoder<'a, F> {
         self.write_chunk(*b"IEND", &zero)
     }
 
+    pub fn write_default_image(&mut self, image_data: &[u8], filter: Option<Filter>, row_stride: Option<usize>) -> ApngResult<()> {
+        if self.default_image {
+            return Err(ApngError::MulitiDefaultImage);
+        }
+        if 0 < self.sequence {
+            return Err(ApngError::DefaultImageNotAtFirst);
+        }
+        self.default_image = true;
+        let rect = self.compute_rect(None);
+        let mut buffer = vec![];
+        self.make_image_data(image_data, row_stride, &mut buffer, rect, filter)?;
+        self.write_chunk(*b"IDAT", &buffer)?;
+        Ok(())
+    }
+
     pub fn write_frame(&mut self, image_data: &[u8], frame: Option<&Frame>, filter: Option<Filter>, row_stride: Option<usize>) -> ApngResult<()> {
         self.written_frames += 1;
         if (self.meta.frames as usize) < self.written_frames {
             return Err(ApngError::TooManyFrames(self.meta.frames as usize, self.written_frames));
         }
-        if self.sequence == 0 {
-            self.write_default_image(image_data, row_stride, frame, filter)
+        if !self.default_image && self.sequence == 0 {
+            self.write_animation_frame_with_default(image_data, row_stride, frame, filter)
         } else {
             self.write_animation_frame(image_data, row_stride, frame, filter)
         }
+    }
+
+    fn compute_rect(&self, frame: Option<&Frame>) -> Rectangle {
+        let width = frame.and_then(|it| it.width).unwrap_or(self.meta.width);
+        let height = frame.and_then(|it| it.height).unwrap_or(self.meta.height);
+        let x = frame.and_then(|it| it.x).unwrap_or(0);
+        let y = frame.and_then(|it| it.y).unwrap_or(0);
+        Rectangle { width, height, x, y }
     }
 
     fn next_sequence(&mut self) -> u32 {
@@ -176,11 +201,19 @@ impl<'a, F: io::Write> Encoder<'a, F> {
     }
 
     fn write_animation_frame(&mut self, image_data: &[u8], row_stride: Option<usize>, frame: Option<&Frame>, filter: Option<Filter>) -> ApngResult<()> {
-        let size = self.write_frame_control(frame)?;
+        let rect = self.write_frame_control(frame)?;
         let mut buffer = vec![];
         buffer.write_u32::<BigEndian>(self.next_sequence())?;
-        self.make_image_data(image_data, row_stride, &mut buffer, size, filter)?;
+        self.make_image_data(image_data, row_stride, &mut buffer, rect, filter)?;
         self.write_chunk(*b"fdAT", &buffer)?;
+        Ok(())
+    }
+
+    fn write_animation_frame_with_default(&mut self, image_data: &[u8], row_stride: Option<usize>, frame: Option<&Frame>, filter: Option<Filter>) -> ApngResult<()> {
+        let rect = self.write_frame_control(frame)?;
+        let mut buffer = vec![];
+        self.make_image_data(image_data, row_stride, &mut buffer, rect, filter)?;
+        self.write_chunk(*b"IDAT", &buffer)?;
         Ok(())
     }
 
@@ -206,30 +239,18 @@ impl<'a, F: io::Write> Encoder<'a, F> {
         Ok(())
     }
 
-    fn write_default_image(&mut self, image_data: &[u8], row_stride: Option<usize>, frame: Option<&Frame>, filter: Option<Filter>) -> ApngResult<()> {
-        let size = self.write_frame_control(frame)?;
-        let mut buffer = vec![];
-        self.make_image_data(image_data, row_stride, &mut buffer, size, filter)?;
-        self.write_chunk(*b"IDAT", &buffer)?;
-        Ok(())
-    }
-
     fn write_frame_control(&mut self, frame: Option<&Frame>) -> ApngResult<Rectangle> {
-        let width = frame.and_then(|it| it.width).unwrap_or(self.meta.width);
-        let height = frame.and_then(|it| it.height).unwrap_or(self.meta.height);
-        let x = frame.and_then(|it| it.x).unwrap_or(0);
-        let y = frame.and_then(|it| it.y).unwrap_or(0);
-        let rect = Rectangle { width, height, x, y };
+        let rect = self.compute_rect(frame);
         let delay = frame.and_then(|it| it.delay).unwrap_or_default();
         let dispose = frame.and_then(|it| it.dispose_operator).unwrap_or_default() as u8;
         let blend = frame.and_then(|it| it.blend_operator).unwrap_or_default() as u8;
 
         let mut buffer = vec![];
         buffer.write_u32::<BigEndian>(self.next_sequence())?;
-        buffer.write_u32::<BigEndian>(width)?;
-        buffer.write_u32::<BigEndian>(height)?;
-        buffer.write_u32::<BigEndian>(x)?;
-        buffer.write_u32::<BigEndian>(y)?;
+        buffer.write_u32::<BigEndian>(rect.width)?;
+        buffer.write_u32::<BigEndian>(rect.height)?;
+        buffer.write_u32::<BigEndian>(rect.x)?;
+        buffer.write_u32::<BigEndian>(rect.y)?;
         buffer.write_u16::<BigEndian>(delay.numerator)?;
         buffer.write_u16::<BigEndian>(delay.denominator)?;
         buffer.write_all(&[dispose, blend])?;
@@ -600,6 +621,24 @@ mod tests {
         let _ = Encoder::create(&mut buffer, meta).unwrap();
     }
 
+    #[test]#[should_panic(expected="DefaultImageNotAtFirst")]
+    fn test_default_image_position_validation() {
+        let mut buffer = vec![];
+        let meta = Meta { width: 2, height: 2, color: Color::RGB(8), frames: 1, plays: None };
+        let mut encoder = Encoder::create(&mut buffer, meta).unwrap();
+        encoder.write_frame(&FOUR, None, None, None).unwrap();
+        encoder.write_default_image(&FOUR, None, None).unwrap();
+    }
+
+    #[test]#[should_panic(expected="MulitiDefaultImage")]
+    fn test_default_image_count_validation() {
+        let mut buffer = vec![];
+        let meta = Meta { width: 2, height: 2, color: Color::RGB(8), frames: 1, plays: None };
+        let mut encoder = Encoder::create(&mut buffer, meta).unwrap();
+        encoder.write_default_image(&FOUR, None, None).unwrap();
+        encoder.write_default_image(&FOUR, None, None).unwrap();
+    }
+
     #[test]
     fn test_generate_png_without_filter() {
         test_generate_png("cherenkov-none.png", Some(Filter::None));
@@ -725,6 +764,39 @@ mod tests {
             buffer.resize(WIDTH * HEIGHT * PX, 0);
             f(&mut rng, buffer.as_mut_slice(), 10 + i as i64 * 5, 0.0, 0.0);
             encoder.write_frame(&buffer, Some(&frame), None, None).unwrap();
+        }
+        encoder.finish().unwrap();
+    }
+
+    #[test]
+    fn test_generate_default_image() {
+        const WIDTH: u32 = 10;
+        const HEIGHT: u32 = 10;
+
+        let mut file = create_file("default-image.png");
+
+        let frames = 3;
+        let meta = Meta {
+            width: WIDTH,
+            height: HEIGHT,
+            color: Color::Grayscale(8),
+            frames,
+            plays: None, // Infinite loop
+        };
+        let mut encoder = Encoder::create(&mut file, meta).unwrap();
+
+        let mut buffer = vec![];
+        buffer.resize((WIDTH * HEIGHT) as usize, 0);
+        encoder.write_default_image(&buffer, None, None).unwrap();
+        for i in 0 .. frames as usize {
+            for (index, it) in buffer.iter_mut().enumerate() {
+                if index % 3 == i {
+                    *it = 0xff;
+                } else {
+                    *it = 0x00;
+                }
+            }
+            encoder.write_frame(&buffer, None, None, None).unwrap();
         }
         encoder.finish().unwrap();
     }

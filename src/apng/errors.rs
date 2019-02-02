@@ -9,12 +9,16 @@ pub type ApngResult<T> = Result<T, ApngError>;
 
 #[derive(Fail, Debug)]
 pub enum ApngError {
+    #[fail(display = "Write a default image at first")]
+    DefaultImageNotAtFirst,
     #[fail(display = "Invalid argument")]
     InvalidArgument,
     #[fail(display = "Invalid color")]
     InvalidColor,
     #[fail(display = "IO error: {}", 0)]
     Io(IOError),
+    #[fail(display = "Default image already exists")]
+    MulitiDefaultImage,
     #[fail(display = "Not enough frames: expected={}, actual={}", 0, 1)]
     NotEnoughFrames(usize, usize),
     #[fail(display = "Not enough argument")]
