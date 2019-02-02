@@ -582,7 +582,6 @@ mod tests {
         let mut image_data = vec![];
         image_data.resize(1000, 0);
         encoder.write_frame(&image_data, None, None, None).unwrap();
-        encoder.finish().unwrap();
     }
 
     #[test]#[should_panic(expected="TooSmallImage")]
@@ -591,7 +590,6 @@ mod tests {
         let meta = Meta { width: 2, height: 2, color: Color::RGB(8), frames: 1, plays: None };
         let mut encoder = Encoder::create(&mut buffer, meta).unwrap();
         encoder.write_frame(&[0x00], None, None, None).unwrap();
-        encoder.finish().unwrap();
     }
 
     #[test]#[should_panic(expected="TooLargeImage")]
@@ -601,7 +599,6 @@ mod tests {
         let mut encoder = Encoder::create(&mut buffer, meta).unwrap();
         let frame = Frame { x: Some(1), ..Default::default() };
         encoder.write_frame(&FOUR, Some(&frame), None, None).unwrap();
-        encoder.finish().unwrap();
     }
 
     #[test]#[should_panic(expected="TooLargeImage")]
@@ -611,7 +608,6 @@ mod tests {
         let mut encoder = Encoder::create(&mut buffer, meta).unwrap();
         let frame = Frame { y: Some(1), ..Default::default() };
         encoder.write_frame(&FOUR, Some(&frame), None, None).unwrap();
-        encoder.finish().unwrap();
     }
 
     #[test]#[should_panic(expected="InvalidColor")]
