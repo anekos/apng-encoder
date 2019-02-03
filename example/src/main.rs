@@ -63,7 +63,7 @@ fn main() {
             message.push_str(&format!("\n\tcaused by: {}", cause));
             fail = cause;
         }
-        eprintln!("Error: {}\n", message);
+        eprintln!("{}\n", message);
         print_usage();
         exit(1);
     }
