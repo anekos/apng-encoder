@@ -9,3 +9,7 @@ Options:
 Delay format:
   `1/2` for 0.5 seconds
   `3/1` for 3 seconds
+
+Examples:
+  apngc first.png second.png third.png --output out.png
+  apngc --default default-image.png --delay 1/2 first.png -x 20 -y 20 second-small-center.png -x 0 -y 0 --delay 3/2 third.png
