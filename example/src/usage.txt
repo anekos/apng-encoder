@@ -1,5 +1,5 @@
 Usage:
-  apngc {{<OPTIONS> <IMAGE_FILE> | --default <IMAGE_FILE>}}...
+  apngc {{<OPTIONS> <IMAGE_FILE>}}... [--default <IMAGE_FILE>]
 
 Options:
   -d, --delay DELAY
