@@ -5,8 +5,6 @@ Options:
   -d, --delay DELAY
   -x X
   -y X
-  -w, --width WIDTH
-  -h, --height HEIGHT
 
 Delay format:
   `1/2` for 0.5 seconds
