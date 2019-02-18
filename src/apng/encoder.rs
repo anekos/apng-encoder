@@ -323,8 +323,7 @@ fn filter_none<E: Write>(image_data: &[u8], row_stride: usize, _pixel_bytes: usi
 }
 
 fn filter_sub<E: Write>(image_data: &[u8], row_stride: usize, pixel_bytes: usize, e: &mut E) -> ApngResult<()> {
-    let mut buffer = Vec::<u8>::with_capacity(row_stride);
-    buffer.resize(row_stride, 0);
+    let mut buffer = vec![0; row_stride];
 
     for line in image_data.chunks(row_stride) {
         e.write_all(&[0x01])?;
@@ -340,8 +339,7 @@ fn filter_sub<E: Write>(image_data: &[u8], row_stride: usize, pixel_bytes: usize
 
 fn filter_up<E: Write>(image_data: &[u8], row_stride: usize, _pixel_bytes: usize, e: &mut E) -> ApngResult<()> {
     let lines: Vec<&[u8]> = image_data.chunks(row_stride).collect();
-    let mut buffer = Vec::<u8>::with_capacity(row_stride);
-    buffer.resize(row_stride, 0);
+    let mut buffer = vec![0; row_stride];
 
     e.write_all(&[0x02])?;
     e.write_all(&lines[0])?;
@@ -359,8 +357,7 @@ fn filter_up<E: Write>(image_data: &[u8], row_stride: usize, _pixel_bytes: usize
 
 fn filter_average<E: Write>(image_data: &[u8], row_stride: usize, pixel_bytes: usize, e: &mut E) -> ApngResult<()> {
     let lines: Vec<&[u8]> = image_data.chunks(row_stride).collect();
-    let mut buffer = Vec::<u8>::with_capacity(row_stride);
-    buffer.resize(row_stride, 0);
+    let mut buffer = vec![0; row_stride];
 
     e.write_all(&[0x03])?;
     buffer[..pixel_bytes].clone_from_slice(&lines[0][..pixel_bytes]);
@@ -407,8 +404,7 @@ fn filter_paeth<E: Write>(image_data: &[u8], row_stride: usize, pixel_bytes: usi
     }
 
     let lines: Vec<&[u8]> = image_data.chunks(row_stride).collect();
-    let mut buffer = Vec::<u8>::with_capacity(row_stride);
-    buffer.resize(row_stride, 0);
+    let mut buffer = vec![0; row_stride];
 
     e.write_all(&[0x04])?;
     buffer[..pixel_bytes].clone_from_slice(&lines[0][..pixel_bytes]);
