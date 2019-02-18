@@ -1,6 +1,7 @@
 
 [![apng-encoder at crates.io](https://img.shields.io/crates/v/apng-encoder.svg)](https://crates.io/crates/apng-encoder)
 [![apng-encoder at docs.rs](https://docs.rs/apng-encoder/badge.svg)](https://docs.rs/apng-encoder)
+[![Build Status](https://travis-ci.org/anekos/apng-encoder.svg?branch=master)](https://travis-ci.org/anekos/apng-encoder)
 
 
 # APNG Encoder for Rust
