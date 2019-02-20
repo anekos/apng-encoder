@@ -1,4 +1,8 @@
 
+[![apng-encoder at crates.io](https://img.shields.io/crates/v/apng-encoder.svg)](https://crates.io/crates/apng-encoder)
+[![apng-encoder at docs.rs](https://docs.rs/apng-encoder/badge.svg)](https://docs.rs/apng-encoder)
+
+
 # APNG Encoder for Rust
 
 ![Animated Cat](https://gyazo.snca.net/2019/01/17-193109-e35952c2667267664475a8f08e8ab35d.png)
