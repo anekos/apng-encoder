@@ -5,7 +5,7 @@ authors = ["anekos <anekos@snca.net>"]
 edition = "2018"
 description = "APNG (Animated PNG) Encoder"
 repository = "http://github.com/anekos/apng-encoder"
-license-file = "LICENSE"
+license = "MIT OR Apache-2.0"
 readme = "README.md"
 
 [features]
