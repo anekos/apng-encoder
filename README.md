@@ -13,3 +13,4 @@
 
 - [Simple example](https://github.com/anekos/apng-encoder/blob/master/src/apng/encoder.rs#L15)
 - [Application example](https://github.com/anekos/apng-encoder/tree/master/example)
+- [Fern generator example](https://github.com/anekos/shidaa)
