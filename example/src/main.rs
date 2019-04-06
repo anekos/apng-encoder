@@ -7,8 +7,8 @@ use std::process::exit;
 use failure::Fail;
 use image::GenericImageView;
 
-use apng_encoder::apng::{Color, Delay, Frame, Meta};
-use apng_encoder::apng::encoder::Encoder;
+use apng_encoder::{Color, Delay, Frame, Meta};
+use apng_encoder::Encoder;
 
 mod errors;
 
