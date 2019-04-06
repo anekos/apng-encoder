@@ -5,4 +5,8 @@
 #[cfg(feature = "benchmark")]
 extern crate test;
 
-pub mod apng;
+mod apng;
+
+pub use apng::*;
+pub use apng::encoder::*;
+pub use apng::errors::*;

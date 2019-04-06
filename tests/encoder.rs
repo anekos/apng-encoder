@@ -5,8 +5,8 @@ use image::ImageDecoder;
 use image::png::PNGDecoder;
 use rand::prelude::*;
 
-use apng_encoder::apng::encoder::{Encoder, Filter};
-use apng_encoder::apng::{Color, Delay, Frame, Meta};
+use apng_encoder::{Encoder, Filter};
+use apng_encoder::{Color, Delay, Frame, Meta};
 
 #[cfg(feature = "benchmark")]
 use test::Bencher;

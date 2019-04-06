@@ -17,8 +17,8 @@ use super::errors::{ApngResult, ApngError};
 /// # Example
 ///
 /// ```
-/// use apng_encoder::apng::{Color, Delay, Frame, Meta};
-/// use apng_encoder::apng::encoder::Encoder;
+/// use apng_encoder::{Color, Delay, Frame, Meta};
+/// use apng_encoder::Encoder;
 /// use std::fs::File;
 ///
 /// // Generate 2x2 Animated PNG (4 frames)
