@@ -87,6 +87,7 @@ use super::errors::{ApngResult, ApngError};
 
 
 
+#[derive(Debug, Eq, PartialEq)]
 pub struct Encoder<'a, F: io::Write> {
     default_image: bool,
     meta: Meta,
@@ -95,7 +96,7 @@ pub struct Encoder<'a, F: io::Write> {
     written_frames: usize,
 }
 
-#[derive(Clone, Copy, IntoEnumIterator)]
+#[derive(Clone, Copy, Debug, Eq, IntoEnumIterator, PartialEq)]
 pub enum Filter {
     None = 0,
     Sub = 1,
@@ -104,7 +105,7 @@ pub enum Filter {
     Paeth = 4,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Rectangle {
     height: u32,
     modified: bool,

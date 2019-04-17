@@ -16,31 +16,32 @@ use crate::errors::{AppResult, AppError};
 
 
 
-#[derive(Debug, Default, Clone)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 struct EntryParameter {
     delay: Option<Delay>,
     offset: Offset,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 struct Entry {
     filepath: String,
     parameter: EntryParameter,
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 struct Setting {
     default_image: Option<String>,
     entries: Vec<Entry>,
     plays: u32,
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 struct Parsed {
     output: Option<String>,
     setting: Setting,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
 struct Image {
     color: Color,
     data: Vec<u8>,
@@ -48,7 +49,7 @@ struct Image {
     width: u32,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct Offset {
     x: Option<u32>,
     y: Option<u32>,
