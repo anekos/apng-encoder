@@ -12,3 +12,4 @@ name = "apngc"
 apng-encoder = { path = "../" }
 failure = "*"
 image = "0.21"
+indicatif = "0.14.0"

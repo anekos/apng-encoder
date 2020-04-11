@@ -3,12 +3,15 @@ use std::env;
 use std::fs::{File, OpenOptions};
 use std::io::{stdout, BufWriter, Read, Write};
 use std::process::exit;
+use std::path::Path;
 
 use failure::Fail;
 use image::GenericImageView;
 
 use apng_encoder::{Color, Delay, Frame, Meta};
 use apng_encoder::Encoder;
+
+use indicatif::{ProgressBar, ProgressStyle};
 
 mod errors;
 
@@ -91,10 +94,23 @@ fn app() -> AppResult<()> {
 fn compile<T: Write>(out: &mut T, setting: &Setting) -> AppResult<()> {
     let mut out = BufWriter::new(out);
 
+    let progress_bar;
+
     let mut encoder;
     let first_color;
 
     if let Some(first) = setting.entries.first() {
+        progress_bar = ProgressBar::new(setting.entries.len() as u64);
+        progress_bar.set_style(
+            ProgressStyle::default_bar()
+                .template("[{bar:60.cyan/blue}] {pos:>4}/{len:4} files processed ({eta} remaining) | {msg}")
+                .progress_chars("█▌ ")
+        );
+        progress_bar.set_message(
+            Path::new(&first.filepath)
+                .file_name().expect("Couldn't extract filename")
+                .to_str().expect("Couldn't convert filename to normal str")
+        );
         let image = load_image(&first.filepath)?;
         let meta = Meta {
             width: image.width,
@@ -110,20 +126,28 @@ fn compile<T: Write>(out: &mut T, setting: &Setting) -> AppResult<()> {
         }
         let frame = make_frame(&first.parameter, image.width, image.height);
         encoder.write_frame(&image.data, Some(&frame), None, None)?;
+        progress_bar.inc(1);
     } else {
         return Err(AppError::NotEnoughArgument);
     }
 
     for entry in setting.entries.iter().skip(1) {
+        progress_bar.set_message(
+            Path::new(&entry.filepath)
+                .file_name().expect("Couldn't extract filename")
+                .to_str().expect("Couldn't convert filename to normal str")
+        );
         let image = load_image(&entry.filepath)?;
         if first_color != image.color {
             return Err(AppError::InterminglingColorType);
         }
         let frame = make_frame(&entry.parameter, image.width, image.height);
         encoder.write_frame(&image.data, Some(&frame), None, None)?;
+        progress_bar.inc(1);
     }
 
     encoder.finish()?;
+    progress_bar.finish_and_clear();
 
     Ok(())
 }
