@@ -58,7 +58,7 @@ struct Offset {
 
 fn main() {
     if let Err(err) = app() {
-        let mut fail: &Fail = &err;
+        let mut fail: &dyn Fail = &err;
         let mut message = err.to_string();
         while let Some(cause) = fail.cause() {
             message.push_str(&format!("\n\tcaused by: {}", cause));
